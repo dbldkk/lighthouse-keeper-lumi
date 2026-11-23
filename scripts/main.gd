@@ -23,6 +23,8 @@ const MINIGAMES = preload("res://scripts/minigames.gd")
 const HOMESTEAD = preload("res://scripts/homestead.gd")
 const PHOTO_MODE = preload("res://scripts/photo_mode.gd")
 const PHOTO_ALBUM = preload("res://scripts/photo_album.gd")
+const BAL = preload("res://scripts/balance.gd")
+const SCARES = preload("res://scripts/scares.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -95,8 +97,25 @@ var journal_open := false
 var journal_page := 0
 var journal_entries: Array[String] = []
 var camera_shake := 0.0
+## Ужас: режиссёр пугающих моментов и напряжения.
+var scares: Node
+## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
+var last_safe_position := Vector3(3, 1.3, 4)
+var safe_sample_clock := 0.0
+## Сколько секунд после возврата из воды не тикают таймеры событий.
+var respawn_grace := 0.0
+## Очередь сообщений: важное не затирается следующим уведомлением.
+var message_queue: Array[Dictionary] = []
+var message_priority := 0
+## Масло ручного фонаря.
+var lantern_oil := BAL.LANTERN_OIL_MAX
+var oil_warned := false
+var low_health_warned := false
+var cold_warned := false
+var sanity_warned := false
 const STORIES := {
 	"crew_log": {"title": "Журнал экипажа «Северного»", "text": "На последней странице под слоем соли видны четыре подписи.\n\nЛюдкевич Владислав\nКотельников Константин\nВиговский Андрей\nАртамонов Артем\n\nГруппа ИУК2-53Б · 2026\n\nВнизу карандашом приписано: «Если этот лист нашёлся, значит, катер снова на плаву»."},
+	"lens": {"title": "Линза маяка", "text": "Стекло Френеля тёплое, как ладонь. Луч уходит в море ровно раз в восемь секунд.\n\nНа медной раме кто-то нацарапал: «Пока горит — они не войдут». Под надписью ещё три зарубки. Свежие."},
 	"sign": {"title": "01 / Надпись на тропе", "text": "«Если услышишь шаги за собой — не гаси свет».\n\nБуквы вырезаны неровно, словно кто-то торопился. Под последней строчкой — маленький рисунок маяка.\n\nВы узнаёте этот почерк. Так вы подписывали свои вещи ещё до приезда на остров. Но эту табличку вы видите впервые."},
 	"radio": {"title": "02 / Сигнал с берега", "text": "Частота 104.6. Сквозь треск прорывается голос:\n\n«Северный, ответьте. Последний катер ушёл три недели назад. Больше никто не высаживался на острове. Повторяю: вы там один».\n\nПередача обрывается. На секунду в динамике слышно ваше собственное дыхание — с небольшим опозданием.\n\nКто тогда ходит по лесу после заката?"}
 }
@@ -153,7 +172,13 @@ func _ready() -> void:
 	sound = Node.new()
 	sound.set_script(SOUND)
 	add_child(sound)
-	player.stepped.connect(sound.footstep)
+	player.stepped.connect(on_player_step)
+	scares = SCARES.new()
+	scares.name = "Scares"
+	scares.game = self
+	add_child(scares)
+	widen_gangplank()
+	apply_lantern_light()
 	var listener := AudioListener3D.new()
 	listener.name = "HorrorListener"
 	listener.position.y = 1.4
@@ -313,6 +338,18 @@ func start_shift() -> void:
 	player.reset_motion()
 	player.stamina = 100
 	player.lantern_on = true
+	lantern_oil = BAL.LANTERN_OIL_MAX
+	oil_warned = false
+	low_health_warned = false
+	cold_warned = false
+	sanity_warned = false
+	message_queue.clear()
+	message_priority = 0
+	respawn_grace = 0.0
+	last_safe_position = Vector3(3, 1.3, 4)
+	target_zoom = clampf(target_zoom, 18, 38)
+	if is_instance_valid(scares):
+		scares.reset()
 	playing = true
 	paused = false
 	finished = false
@@ -372,24 +409,22 @@ func _process(delta: float) -> void:
 		# Голод ощутим: за сутки уходит около трети сытости, бег и работа тратят больше.
 		var drain := 0.11
 		if campaign.enabled:
-			drain = 0.025 if first_shift_demo.active() else 0.17
+			drain = BAL.HUNGER_DRAIN_DEMO if first_shift_demo.active() else BAL.HUNGER_DRAIN_CAMPAIGN
 			if Input.is_physical_key_pressed(KEY_SHIFT) and player.velocity.length() > 4.5:
-				drain += 0.12
+				drain += BAL.HUNGER_DRAIN_SPRINT
 		hunger = maxf(0, hunger - delta * drain)
 		apply_hunger(delta)
 		if hunger <= 0:
-			health -= delta * 0.8
-		sanity = clampf(sanity + delta * (-0.14 if is_night() and not is_safe(player.position) else 0.04), 0, 100)
-		if sanity <= 0:
-			health -= delta * 0.3
+			health -= delta * BAL.STARVING_DAMAGE
+		update_sanity(delta)
+		update_lantern_oil(delta)
+		update_cold(delta)
+		warn_low_health()
 		if is_night():
 			was_night = true
 			spawn_clock += delta
 			if not night_spawned:
 				spawn_night()
-			elif spawn_clock > 45 and enemies.size() < 4:
-				spawn_shadow(Vector3(-13, 1.5, 4))
-				spawn_clock = 0
 		else:
 			if island_events.keeps_day_enemies():
 				enemies = enemies.filter(func(enemy): return enemy.day_event)
@@ -401,21 +436,21 @@ func _process(delta: float) -> void:
 		if health <= 0:
 			finish_shift(false)
 		interaction_cooldown = maxf(0, interaction_cooldown - delta)
+		respawn_grace = maxf(0, respawn_grace - delta)
 		update_nearest()
-		if player.position.y < -2:
-			player.position = Vector3(3, 1.3, 4)
-			player.reset_motion()
-			take_damage(10)
-			notify("Течение слишком сильное. Вы вернулись к хижине.")
+		track_safe_ground(delta)
+		if player.position.y < BAL.FALL_Y:
+			rescue_from_water()
 	lantern_beam.tick(delta, active and player.enabled)
-	message_time = maxf(0, message_time - delta)
+	tick_messages(delta)
 	update_atmosphere()
 	sound.set_ambience(coastal_life.night_strength, coastal_life.rain_strength)
 	sound.set_story_silence(campaign.enabled and campaign.state.night and campaign.entry().night.kind=="silence")
 	var ship: Node3D = world.get_node("NorthernCoast/CoastalVessel")
 	sound.set_engine(player.position.distance_to(ship.position+Vector3(0,1,1)), expedition.state.engine and playing and not finished and not paused)
 	building_interiors.update_state(player.position, playing and not finished, lighthouse_interior.active or not building_interiors.active.is_empty(), expedition.sailing, expedition.state.tools, expedition.state.signal)
-	building_interiors.update_first_watch(campaign.first_window_strength(), float(campaign.state.night_clock))
+	var window_ghost: float = scares.window_strength if is_instance_valid(scares) else 0.0
+	building_interiors.update_first_watch(maxf(campaign.first_window_strength(), window_ghost), float(campaign.state.night_clock) if window_ghost <= 0 else 8.0)
 	update_camera(delta)
 	hud.refresh()
 	if not capture_path.is_empty():
@@ -426,6 +461,9 @@ func _process(delta: float) -> void:
 func update_camera(delta: float) -> void:
 	if is_instance_valid(photo) and photo.active:
 		return
+	# Страховка: после фоторежима камера всегда изометрическая и с допустимым зумом.
+	if camera.projection != Camera3D.PROJECTION_ORTHOGONAL:
+		restore_camera()
 	var focus := Vector3(-5, 2, 3)
 	var zoom := 42.0
 	var offset := Vector3(29, 34, 40)
@@ -481,8 +519,10 @@ func lighthouse_action() -> bool:
 		return true
 	if inside and lighthouse_interior.near_optic(player.position):
 		player.play_gesture("interact")
+		interaction_cooldown = .6
 		if not lighthouse_on or campaign.intercept("lighthouse_lens") != 1:
-			notify("Линза вращается. Свет маяка виден с моря." if lighthouse_on else "Линза погасла. Питание подаётся от генератора снаружи.")
+			inspect_lens()
+		return true
 	return inside
 
 ## Пробел внутри маяка: быстро подняться к линзе или спуститься к двери.
@@ -800,11 +840,12 @@ func spawn_night() -> void:
 	if campaign.enabled and campaign.state.night:
 		campaign.spawn_threats()
 		return
+	# Начиная со второго дня ночь ведёт волновая оборона (night_raids): старые спавнеры не дублируют её.
+	if day > 1:
+		notify("На острове темнеет. Держите фонарь зажжённым и берегите масло.", 8)
+		return
 	for at in [Vector3(-11, 1.5, 5), Vector3(0, 1.5, -10), Vector3(14, 1.5, 9)]:
 		spawn_shadow(at)
-	if day>1:
-		for at in [Vector3(-8,1.5,-31),Vector3(14,1.5,-27)]:
-			spawn_shadow(at)
 	notify("На острове темнеет. Фонарь и свет маяка отгоняют тени.", 8)
 
 func spawn_shadow(at: Vector3, kind := "shadow") -> CharacterBody3D:
@@ -823,8 +864,13 @@ func on_shadow_dispelled(enemy: Node) -> void:
 	night_raids.on_dispelled(enemy)
 	sanity = minf(100, sanity + (6.0 if enemy.phantom else 3.0))
 	sound.cue("dispel")
-	camera_shake = maxf(camera_shake, .35)
+	camera_shake = maxf(camera_shake, .15)
 	feedback(enemy.global_position, "Морок рассеян" if enemy.phantom else "Тень рассеяна")
+
+## Тень замахнулась: короткий звук-предупреждение, если она рядом со смотрителем.
+func on_shadow_windup(enemy: Node) -> void:
+	if enemy.global_position.distance_to(player.global_position) < 3.0:
+		sound.cue("tell")
 
 func on_shadow_sabotage(enemy: Node, delta: float) -> void:
 	night_raids.on_sabotage(enemy, delta)
@@ -843,26 +889,42 @@ var hunger_warned := false
 
 ## Последствия голода: медленнее восстанавливается выносливость, затем падают скорость и рассудок.
 func apply_hunger(delta: float) -> void:
-	player.speed_scale = 0.84 if hunger < 15 else 1.0
-	if hunger < 35:
-		player.stamina_recovery_scale *= 0.5
+	player.speed_scale = 0.84 if hunger < BAL.STARVING_AT else 1.0
+	# Множитель голода хранится отдельно; итог считает survival (тепло × голод), без накопления по кадрам.
+	survival.hunger_mult = BAL.HUNGRY_STAMINA_MULT if hunger < BAL.HUNGRY_AT else 1.0
+	player.stamina_recovery_scale = survival.warmth_mult * survival.hunger_mult
+	if hunger < BAL.HUNGRY_AT:
 		lantern_beam.regen_scale = 0.6 * extras.forecast_bonus()
 	else:
 		lantern_beam.regen_scale = extras.forecast_bonus()
-	if hunger < 15:
+	if hunger < BAL.STARVING_AT:
 		sanity = maxf(0, sanity - delta * 0.08)
-	if hunger < 35 and not hunger_warned:
+	if hunger < BAL.HUNGRY_AT and not hunger_warned:
 		hunger_warned = true
 		alert("ВЫ ГОЛОДНЫ", "Выносливость и фонарь восстанавливаются медленнее. Поешьте (R): рыба с причала, урожай с грядок", 5)
 	elif hunger > 45:
 		hunger_warned = false
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, source: String = "shadow") -> void:
 	health = maxf(0, health - amount)
 	player.play_gesture("hit", .36)
-	hud.danger.color.a = 0.22
-	camera_shake = 1.0
-	notify("Тень рядом! Включите фонарь или бегите к свету.")
+	hud.danger.color.a = clampf(0.3 + amount / 40.0, 0.3, 0.6)
+	camera_shake = maxf(camera_shake, clampf(amount / 25.0, .25, .7))
+	sound.cue("hit")
+	feedback(player.position, "−%d" % roundi(amount), Color("ff7a6a"))
+	hit_stop(0.06)
+	if source == "shadow":
+		notify("Тень бьёт! Выжгите её лучом (ПКМ) или бегите к свету.", 3.5, 1)
+	if is_instance_valid(scares):
+		scares.on_damage(amount)
+
+## Короткий «стоп-кадр» при ударе: удар чувствуется телом, а не только цифрой.
+func hit_stop(seconds: float) -> void:
+	if Engine.time_scale < 1.0 or DisplayServer.get_name() == "headless":
+		return
+	Engine.time_scale = 0.15
+	await get_tree().create_timer(seconds, true, false, true).timeout
+	Engine.time_scale = 1.0
 
 func eat() -> bool:
 	if fishing.is_open():
@@ -902,11 +964,41 @@ func select_provision(cooked: bool) -> void:
 	var benefit := PROVISIONS.bonuses(item)
 	notify("%s: %s. После еды: +%d здоровья, +%d сытости." % ["Еда" if cooked else "Рыба для готовки", PROVISIONS.label(item), benefit.health, benefit.hunger])
 
-func notify(content: String, duration: float = 5.0) -> void:
-	message = content
-	message_time = duration
+## Сообщение внизу экрана. priority: 0 — обычное, 1 — важное (не затирается обычным), 2 — критичное.
+func notify(content: String, duration: float = 5.0, priority: int = 0) -> void:
+	if content.is_empty():
+		return
+	if message_time > 0 and content == message:
+		message_time = maxf(message_time, duration)
+		return
+	for queued in message_queue:
+		if queued.text == content:
+			return
+	if message_time <= 0.4 or priority >= message_priority:
+		if message_time > 1.0 and priority == message_priority and priority > 0:
+			message_queue.push_front({"text": message, "time": message_time, "priority": message_priority})
+		message = content
+		message_time = duration
+		message_priority = priority
+	else:
+		message_queue.append({"text": content, "time": duration, "priority": priority})
+		if message_queue.size() > 4:
+			message_queue.pop_front()
 
-func feedback(at: Vector3, content: String) -> void:
+func tick_messages(delta: float) -> void:
+	# Пока говорит радио, сообщение скрыто — и его время не тратится.
+	if is_instance_valid(radio) and radio.speaking() and message_time > 0:
+		return
+	message_time = maxf(0, message_time - delta)
+	if message_time <= 0:
+		message_priority = 0
+		if not message_queue.is_empty():
+			var next: Dictionary = message_queue.pop_front()
+			message = next.text
+			message_time = minf(float(next.time), 6.0)
+			message_priority = int(next.priority)
+
+func feedback(at: Vector3, content: String, color: Color = Color("ffe0a0")) -> void:
 	if not building_interiors.active.is_empty():
 		at = player.position
 	var label := Label3D.new()
@@ -914,7 +1006,7 @@ func feedback(at: Vector3, content: String) -> void:
 	label.position = at + Vector3(0, 2.3, 0)
 	label.font_size = 32
 	label.pixel_size = 0.009
-	label.modulate = Color("ffe0a0")
+	label.modulate = color
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	add_child(label)
@@ -1058,10 +1150,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if hud.settings_panel.visible or hud.backpack.visible or hud.salvage.visible or hud.fieldwork.visible or hud.tuner.visible or fishing.is_open() or expedition.sailing:
 		return
 	if event is InputEventMouseButton and event.pressed and playing:
+		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and overview:
+			# Колесо в режиме обзора возвращает обычную камеру, а не молча игнорируется.
+			overview = false
+			notify("Обзор выключен. Колесо мыши — приближение, O — снова обзор.", 3)
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			target_zoom = maxf(18, target_zoom - 2)
+			target_zoom = clampf(target_zoom - 2, 18, 38)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			target_zoom = minf(38, target_zoom + 2)
+			target_zoom = clampf(target_zoom + 2, 18, 38)
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
 	if campaign.code_open():
@@ -1121,7 +1217,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				player.request_jump()
 		KEY_F:
-			player.toggle_lantern()
+			toggle_lantern()
 		KEY_R:
 			eat()
 		KEY_Q:
@@ -1131,6 +1227,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_O:
 			if not lighthouse_interior.active and building_interiors.active.is_empty() and not building_interiors.warehouse_open:
 				overview = not overview
+				notify("Обзор острова. O или колесо мыши — вернуть камеру." if overview else "Камера снова у смотрителя.", 3)
 		KEY_J:
 			open_journal()
 		KEY_P:
@@ -1138,10 +1235,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_L:
 			album.open_album()
 		KEY_V:
+			if not OS.is_debug_build():
+				return
 			coastal_life.cycle_weather()
 			notify("Погода: " + ["автоматически", "дождь", "без дождя"][coastal_life.weather_mode])
 		KEY_N:
-			if not campaign.enabled:
+			if OS.is_debug_build() and not campaign.enabled:
 				hour = 17.0 if is_night() else 22.0
 				was_night = false
 		KEY_F9:
@@ -1350,11 +1449,16 @@ func start_demo() -> void:
 	# Separate demonstration snapshot; never overwrites the player's save.
 	first_shift_demo.reset()
 	playing = false
-	campaign.enabled = false
+	# Свободный осмотр — настоящая кампания на 14 дней, начатая с 5-го дня:
+	# работают маркер цели, строка «ЦЕЛЬ», фиксированные ночи и смена дня только после задач.
+	campaign.enabled = true
 	checkpoints_enabled = false
 	start_shift()
 	day = 5
-	hour = 14
+	campaign.ensure_day()
+	campaign.state.completed_days = [1, 2, 3, 4]
+	campaign.state.beacon_charge = 3
+	hour = 7
 	fuel_found = true
 	lighthouse_on = true
 	barricade_built = true
@@ -1370,4 +1474,209 @@ func start_demo() -> void:
 	camera_focus = player.position
 	camera_zoom = 30
 	target_zoom = 30
-	notify("Показ нового этапа · день 5. Пройдите по трапу на катер и почините корпус. M — карта и задачи.",12)
+	for clue_day in campaign.clue_days():
+		if clue_day < day:
+			var clue_id := "c:%d:0" % clue_day
+			if clue_id not in journal_entries:
+				journal_entries.append(clue_id)
+	notify("Показ нового этапа · день 5. Бирюзовый маркер ведёт к цели. Трап на катер — у причала гавани.",12)
+
+
+# ---------------------------------------------------------------- камера после фоторежима
+## Возвращает изометрическую камеру в рабочее состояние: проекция, зум в пределах, без «обзора».
+func restore_camera() -> void:
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.fov = 75
+	camera.near = .05
+	overview = false
+	target_zoom = clampf(target_zoom, 18, 38)
+	if lighthouse_interior.active:
+		camera_zoom = LIGHTHOUSE_INTERIOR.ZOOM
+	elif not building_interiors.active.is_empty() or building_interiors.warehouse_open:
+		camera_zoom = building_interiors.zoom()
+	else:
+		camera_zoom = clampf(camera_zoom, 18, 38)
+		camera_focus = player.position + Vector3.UP
+	camera.size = camera_zoom
+
+# ---------------------------------------------------------------- падение в воду
+func track_safe_ground(delta: float) -> void:
+	safe_sample_clock += delta
+	if safe_sample_clock < BAL.SAFE_GROUND_SAMPLE:
+		return
+	safe_sample_clock = 0
+	if not player.is_on_floor() or player.position.y < .5 or player.jump_in_progress:
+		return
+	if lighthouse_interior.active or not building_interiors.active.is_empty() or expedition.sailing:
+		return
+	# Запоминаем только точку, под которой земля есть и чуть в стороне: не край причала.
+	for offset in [Vector3.ZERO, Vector3(.9, 0, 0), Vector3(-.9, 0, 0), Vector3(0, 0, .9), Vector3(0, 0, -.9)]:
+		if night_raids.ground_at(player.position + offset) == null:
+			return
+	last_safe_position = player.position + Vector3.UP * .3
+
+func rescue_from_water() -> void:
+	var at := last_safe_position
+	if at.y < .5:
+		at = Vector3(3, 1.3, 4)
+	player.position = at
+	player.reset_motion()
+	respawn_grace = BAL.EVENT_GRACE_AFTER_RESPAWN
+	health = maxf(1, health - BAL.FALL_DAMAGE)
+	hud.danger.color.a = .25
+	sound.cue("splash")
+	camera_focus = player.position + Vector3.UP
+	notify("Вы сорвались в холодную воду и выбрались на берег. Держитесь середины трапа и причала.", 5, 1)
+
+## Шире настил трапа и невидимые поручни по краям: на катер можно пройти, не соскальзывая.
+func widen_gangplank() -> void:
+	var ramp := world.get_node_or_null("NorthernCoast/ShipGangplank")
+	if ramp == null:
+		return
+	for shape in ramp.find_children("*", "CollisionShape3D", true, false):
+		if shape.shape is BoxShape3D:
+			var box: BoxShape3D = shape.shape.duplicate()
+			box.size = Vector3(box.size.x, box.size.y, 3.4)
+			shape.shape = box
+	var rails := StaticBody3D.new()
+	rails.name = "GangplankRails"
+	ramp.add_child(rails)
+	for z in [-1.78, 1.78]:
+		var rail := CollisionShape3D.new()
+		var rail_box := BoxShape3D.new()
+		rail_box.size = Vector3(4.6, 1.4, .16)
+		rail.shape = rail_box
+		rail.position = Vector3(0, .75, z)
+		rails.add_child(rail)
+	# Фонари на концах трапа: ночью видно, куда идти.
+	for x in [-2.5, 2.4]:
+		var lamp := OmniLight3D.new()
+		lamp.name = "GangplankLamp"
+		lamp.light_color = Color("ffcf8a")
+		lamp.light_energy = 1.3
+		lamp.omni_range = 4.5
+		lamp.position = Vector3(x, 1.4, -1.5)
+		ramp.add_child(lamp)
+	ramp.visible = false
+
+# ---------------------------------------------------------------- линза
+func inspect_lens() -> void:
+	if not lighthouse_on:
+		notify("Линза погасла. Питание подаётся от генератора у подножия маяка — E у генератора.", 6, 1)
+		sound.cue("flicker")
+		return
+	sound.cue("chime")
+	camera_shake = maxf(camera_shake, .12)
+	feedback(player.position + Vector3(0, .4, 0), "ЛИНЗА · СВЕТ ВИДЕН С МОРЯ", Color("ffe7a6"))
+	target_zoom = clampf(target_zoom, 18, 38)
+	camera_zoom = maxf(LIGHTHOUSE_INTERIOR.ZOOM * .7, 2.5)
+	sanity = minf(100, sanity + 2)
+	if "lens" not in journal_entries:
+		journal_entries.append("lens")
+	notify("Линза вращается ровно, стекло тёплое. Свет маяка виден с моря. (J — журнал)", 6, 1)
+
+# ---------------------------------------------------------------- фонарь
+func apply_lantern_light() -> void:
+	var light := player.get_node_or_null("HandLantern") as OmniLight3D
+	if light != null:
+		light.light_energy = BAL.LANTERN_ENERGY
+		light.omni_range = BAL.LANTERN_RANGE
+
+func toggle_lantern() -> void:
+	if not player.lantern_on and lantern_oil < BAL.LANTERN_RELIGHT_AT:
+		notify("В фонаре нет масла. Масло доливается в хижине, радиостанции или маяке.", 4, 1)
+		sound.cue("flicker")
+		return
+	player.toggle_lantern()
+
+func update_lantern_oil(delta: float) -> void:
+	var sheltered := lighthouse_interior.active or not building_interiors.active.is_empty()
+	if sheltered:
+		lantern_oil = minf(BAL.LANTERN_OIL_MAX, lantern_oil + BAL.LANTERN_OIL_REFILL_INDOORS * delta)
+		if lantern_oil > BAL.LANTERN_OIL_LOW + 10:
+			oil_warned = false
+		return
+	if not player.lantern_on or not is_night() or first_shift_demo.active():
+		return
+	lantern_oil = maxf(0, lantern_oil - BAL.LANTERN_OIL_DRAIN * delta)
+	if lantern_oil < BAL.LANTERN_OIL_LOW and not oil_warned:
+		oil_warned = true
+		alert("МАСЛО НА ИСХОДЕ", "Фонарь скоро погаснет. Долейте масло в любом помещении", 5)
+		sound.cue("flicker")
+	if lantern_oil <= 0:
+		player.lantern_on = false
+		player.play_gesture("lantern")
+		player._sync_lantern()
+		camera_shake = maxf(camera_shake, .3)
+		sound.cue("flicker")
+		alert("ФОНАРЬ ПОГАС", "Масло кончилось. Бегите к свету маяка или в хижину", 6)
+		if is_instance_valid(scares):
+			scares.on_lantern_died()
+
+# ---------------------------------------------------------------- рассудок, холод, здоровье
+func update_sanity(delta: float) -> void:
+	var rate := BAL.SANITY_RECOVERY
+	if is_night() and not is_safe(player.position) and not first_shift_demo.active():
+		rate = -BAL.SANITY_NIGHT_DRAIN
+		if not player.lantern_on:
+			rate -= BAL.SANITY_DARK_DRAIN
+	sanity = clampf(sanity + delta * rate, 0, 100)
+	if sanity <= 0:
+		health -= delta * BAL.SANITY_BREAK_DAMAGE
+	if sanity < BAL.SANITY_HALLUCINATE_AT and not sanity_warned:
+		sanity_warned = true
+		alert("РАССУДОК НА ПРЕДЕЛЕ", "Вам мерещится. Свет и укрытие возвращают ясность; без рассудка теряется здоровье", 5)
+	elif sanity > BAL.SANITY_HALLUCINATE_AT + 12:
+		sanity_warned = false
+
+func update_cold(delta: float) -> void:
+	if not survival.exposure_enabled():
+		return
+	if survival.warmth < BAL.COLD_AT:
+		health -= delta * BAL.COLD_DAMAGE
+		if not cold_warned:
+			cold_warned = true
+			alert("ВЫ ЗАМЕРЗАЕТЕ", "Холод отнимает здоровье. Печь в хижине, костёр в гавани или горячая еда", 5)
+	elif survival.warmth > BAL.COLD_AT + 15:
+		cold_warned = false
+
+func warn_low_health() -> void:
+	if health < BAL.LOW_HEALTH_AT and not low_health_warned and health > 0:
+		low_health_warned = true
+		alert("ЗДОРОВЬЕ НА ИСХОДЕ", "Ещё пара ударов — и смена закончится. Поешьте (R) и держитесь света", 5)
+		sound.cue("alarm")
+	elif health > BAL.LOW_HEALTH_AT + 15:
+		low_health_warned = false
+
+# ---------------------------------------------------------------- шаги
+func on_player_step() -> void:
+	var running: bool = Vector2(player.velocity.x, player.velocity.z).length() > player.WALK_LIMIT + .8
+	sound.footstep(step_surface(), running)
+	if is_instance_valid(scares):
+		scares.on_player_step()
+
+## Поверхность под ногами: дерево, камень, песок у кромки воды или трава.
+func step_surface() -> String:
+	if lighthouse_interior.active:
+		return "stone"
+	if not building_interiors.active.is_empty():
+		return "wood"
+	var space := get_world_3d().direct_space_state
+	var from := player.global_position + Vector3.UP * .4
+	var query := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 1.4, 1)
+	query.exclude = [player.get_rid()]
+	var hit := space.intersect_ray(query)
+	if hit.is_empty():
+		return "wood"
+	var path := str(hit.collider.get_path()) if hit.collider is Node else ""
+	for word in ["Dock", "Plank", "Gangplank", "Deck", "Porch", "Step", "Ramp", "Wood", "Pier", "Harbor", "Vessel", "Crate", "Staves", "Table"]:
+		if word in path:
+			return "wood"
+	for word in ["Lighthouse", "Stone", "Well", "Foundation", "Quarry", "Rock"]:
+		if word in path:
+			return "stone"
+	# У кромки воды — галька и песок: в паре метров в сторону земли уже нет.
+	for offset in [Vector3(2.2, 0, 0), Vector3(-2.2, 0, 0), Vector3(0, 0, 2.2), Vector3(0, 0, -2.2)]:
+		if night_raids.ground_at(player.global_position + offset) == null:
+			return "sand"
+	return "grass"
