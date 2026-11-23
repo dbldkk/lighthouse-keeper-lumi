@@ -7,7 +7,7 @@
 2. Синтезировать и обработать под рацию:
    python3 tools/voice/generate_voice.py --piper /path/to/piper --model /path/to/ru-irinia-medium.onnx
 
-Голос: Piper TTS (VITS), модель ru-irinia-medium (rhasspy/piper, релиз v0.0.2).
+Устарело: прежняя Piper-озвучка (ru-irinia-medium). Актуальный конвейер — tools/voice/neural/README.md.
 Нужен ffmpeg с libvorbis. Результат: assets/audio/voice/<id>.ogg
 """
 import argparse

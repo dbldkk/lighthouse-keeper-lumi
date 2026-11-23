@@ -1,0 +1,4 @@
+{
+ "first_shift_call": {"style": "dispatch", "text": "«Северный», ответьте. Это береговая станция. Назовите наш позывной, чтобы подтвердить связь.", "target": "assets/audio/first_shift/radio_call.wav"},
+ "first_shift_confirm": {"style": "dispatch", "text": "«Северный», связь подтверждаю. Ваш свет виден с материка. Запишите время. На сегодня вы сделали всё, что могли.", "target": "assets/audio/first_shift/radio_confirm.wav"}
+}

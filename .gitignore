@@ -30,3 +30,4 @@ desktop.ini
 # исходники CC0 для tools/audio/horror_sfx.py (скачиваются fetch_cc0.py)
 tools/audio/.cc0_cache/
 __pycache__/
+tools/voice/neural/ref/*.mp3

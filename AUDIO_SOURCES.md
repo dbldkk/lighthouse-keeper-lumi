@@ -6,7 +6,18 @@
 
 ## Голос (assets/audio/voice/*.ogg, assets/audio/first_shift/radio_*.wav)
 
-См. раздел «Голос» ниже.
+* Синтез: **Chatterbox Multilingual** (Resemble AI) — модель и код под лицензией **MIT**,
+  https://github.com/resemble-ai/chatterbox, офлайн на CPU. В аудио встроен неслышимый водяной знак Perth.
+* Тембры голосов — по ~10-секундным образцам чтецов **LibriVox** (общественное достояние, archive.org):
+  «Повести Белкина» (`belkintales_1406_librivox`) — Берег-четыре;
+  «Авантюристы» (`avanturisty_2201_librivox`) — голос в эфире;
+  «Обрыв» (`obryv_1906_librivox`) — капитан на картине;
+  «Записки из подполья» (`notes_underground_russian`) — записи прежней смены.
+  Образцы: `tools/voice/neural/ref/*.wav`, нарезка — `make_refs.py`.
+* Ударения: словарь **Vosk-TTS ru 0.9** (alphacep, Apache 2.0) — только при генерации, в игру не входит.
+* Обработка (ffmpeg): полоса рации и компрессия (диспетчер); понижение, обратная реверберация,
+  тремоло и помехи (чужой голос); деревянная рубка (капитан); плёнка с плаванием и шипением (записи).
+  Скрипты: `tools/voice/neural/`.
 
 ## Записи CC0 (freesound.org)
 
