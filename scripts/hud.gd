@@ -27,6 +27,7 @@ var demo_button: Button
 var first_shift_button: Button
 var title_button: Button
 var settings_button: Button
+var tutorial_button: Button
 var settings_panel: Control
 var backpack: Control
 var salvage: Control
@@ -293,14 +294,15 @@ func build_menu() -> void:
 	demo_button.size.x = 380
 	title_button = make_button(menu, "В главное меню", Vector2(66, 601), func(): game.return_to_title())
 	settings_button = make_button(menu, "Настройки", Vector2(402, 667), func(): settings_panel.open())
+	tutorial_button = make_button(menu, "Обучение", Vector2(202, 667), func(): game.replay_tutorial())
 	continue_button = make_button(menu, "Продолжить", Vector2(66, 601), func(): game.load_game())
 	save_button = make_button(menu, "Сохранить у журнала", Vector2(66, 667), func(): game.request_save())
-	exit_button = make_button(menu, "Выйти из игры", Vector2(66, 733), func(): get_tree().quit())
+	exit_button = make_button(menu, "Выйти", Vector2(66, 733), func(): get_tree().quit())
 	menu.move_child(continue_button, start_button.get_index() + 1)
 	var focus := style(Color.TRANSPARENT, Color("c6a873"), 9)
 	focus.draw_center = false
 	focus.set_border_width_all(2)
-	for button in [start_button, first_shift_button, demo_button, title_button, settings_button, continue_button, save_button, exit_button]:
+	for button in [start_button, first_shift_button, demo_button, title_button, settings_button, tutorial_button, continue_button, save_button, exit_button]:
 		button.add_theme_stylebox_override("focus", focus)
 	text(menu, "Учебная демоверсия  •  Путь с острова\nВлад Людкевич · Костя Котельников\nАндрей Виговский · Артём Артамонов", Rect2(66, 809, 680, 69), 12, MUTED)
 	ending_stamp = text(menu, "", Rect2(785,778,555,48), 17, PAPER)
@@ -322,6 +324,7 @@ func show_menu(mode: String) -> void:
 	demo_button.visible = mode == "title"
 	first_shift_button.visible = mode == "title"
 	settings_button.visible = mode in ["title","pause"]
+	tutorial_button.visible = mode == "title"
 	title_button.visible = in_episode and mode in ["pause","demo_loss"]
 	continue_button.visible = not in_episode and FileAccess.file_exists(game.save_path)
 	layout_menu_buttons(mode)
@@ -366,8 +369,10 @@ func layout_menu_buttons(mode: String) -> void:
 				button.size = Vector2(400, 47)
 				y += 55
 		settings_button.position = Vector2(66, y + 6)
-		exit_button.position = Vector2(272, y + 6)
-		settings_button.size = Vector2(194, 44)
+		tutorial_button.position = Vector2(202, y + 6)
+		exit_button.position = Vector2(338, y + 6)
+		settings_button.size = Vector2(128, 44)
+		tutorial_button.size = settings_button.size
 		exit_button.size = settings_button.size
 		return
 	start_button.position = Vector2(66, 535)

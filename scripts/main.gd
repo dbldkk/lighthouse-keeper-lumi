@@ -32,6 +32,7 @@ const SAVE_POINTS = preload("res://scripts/save_points.gd")
 const SUPPLIES = preload("res://scripts/supplies.gd")
 const ESCALATION = preload("res://scripts/escalation.gd")
 const SMALL_SCARES = preload("res://scripts/small_scares.gd")
+const TUTORIAL = preload("res://scripts/tutorial.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -112,6 +113,7 @@ var lore: Node3D
 var save_points: Node3D
 var supplies: Node3D
 var small_scares: Node3D
+var tutorial: Node
 var escalation: Node
 ## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
 var last_safe_position := Vector3(3, 1.3, 4)
@@ -222,6 +224,11 @@ func _ready() -> void:
 	small_scares.game = self
 	add_child(small_scares)
 	small_scares.setup()
+	tutorial = TUTORIAL.new()
+	tutorial.name = "Tutorial"
+	tutorial.game = self
+	add_child(tutorial)
+	tutorial.setup()
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -423,6 +430,8 @@ func start_shift() -> void:
 	overview = false
 	hud.show_game()
 	notify("День 1. Найдите канистру и запустите маяк. Текущая цель подсвечена бирюзовым столбом света.", 10)
+	if is_instance_valid(tutorial):
+		tutorial.begin()
 	save_checkpoint()
 
 func reset_world_state() -> void:
@@ -1266,6 +1275,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			hud.show_game()
 	if not playing or paused or finished:
 		return
+	if tutorial.handle_key(event.physical_keycode):
+		get_viewport().set_input_as_handled()
+		return
 	match event.physical_keycode:
 		KEY_M:
 			expedition.open_board()
@@ -1508,6 +1520,11 @@ func load_game() -> bool:
 			world.find_child("FuelHandle", true, false).hide()
 	notify("Смена загружена.")
 	loading_save = false
+	if is_instance_valid(tutorial):
+		if day == 1:
+			tutorial.begin()
+		else:
+			tutorial.stop()
 	if campaign.enabled and checkpoints_enabled and (DisplayServer.get_name()!="headless" or checkpoint_path.begins_with("user://automated_")):
 		var checkpoint = state.get("day_checkpoint")
 		if checkpoint_matches(checkpoint):
@@ -1538,7 +1555,18 @@ func start_first_shift_demo() -> void:
 	update_camera(0.0)
 	first_shift_demo.show_intro()
 
+## Главное меню → «Обучение»: сбросить флаг и начать новую смену с подсказками.
+func replay_tutorial() -> void:
+	preferences.tutorial_done = false
+	preferences.save_preferences()
+	first_shift_demo.reset()
+	campaign.enabled = true
+	checkpoints_enabled = true
+	playing = false
+	start_shift()
+
 func return_to_title() -> void:
+	tutorial.stop()
 	first_shift_demo.reset()
 	playing = false
 	paused = false

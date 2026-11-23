@@ -361,8 +361,9 @@ func _process(delta: float) -> void:
 	if not should_hunt():
 		if active:
 			_despawn()
-		if hiding() and not (bool(game.campaign.state.night) if game.campaign.enabled else false):
-			pass
+		# дыхание работает и без охотника — для учебной сцены в первый день
+		gasp_cooldown = maxf(0, gasp_cooldown - delta)
+		_tick_breath(delta)
 		return
 	if not active:
 		_spawn()

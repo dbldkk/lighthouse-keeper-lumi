@@ -9,6 +9,7 @@ const REACH := 1.25
 
 var game: Node
 var books: Array = []    ## {"id","title","at"}
+var writes := 0          ## сколько раз сохранились у журнала (для обучения)
 
 func setup() -> void:
 	books = [
@@ -61,6 +62,7 @@ func write(b: Dictionary) -> bool:
 		game.notify("Не сейчас — оно рядом. Руки дрожат, перо не пишет.", 4, 1)
 		return false
 	if game.save_game(true):
+		writes += 1
 		game.sound.interact("paper")
 		game.notify("%s: запись сделана. Игра сохранена (День %d, %02d:%02d)." % [b.title, game.day, int(game.hour) % 24, int(fmod(game.hour, 1.0) * 60)], 5)
 		game.hud.continue_button.show()

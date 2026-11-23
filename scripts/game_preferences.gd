@@ -10,6 +10,7 @@ var size_index := 1
 var fullscreen := false
 var high_quality := true
 var volumes := [.85, 1.0, .72]
+var tutorial_done := false
 
 func load_preferences() -> void:
 	var config := ConfigFile.new()
@@ -17,6 +18,7 @@ func load_preferences() -> void:
 		size_index = clampi(int(config.get_value("video","size",1)),0,SIZE_OPTIONS.size()-1)
 		fullscreen = bool(config.get_value("video","fullscreen",false))
 		high_quality = bool(config.get_value("video","high_quality",true))
+		tutorial_done = bool(config.get_value("progress","tutorial_done",false))
 		for i in CHANNELS.size():
 			volumes[i] = clampf(float(config.get_value("audio",CHANNELS[i],volumes[i])),0,1)
 	apply()
@@ -26,6 +28,7 @@ func save_preferences() -> Error:
 	config.set_value("video","size",size_index)
 	config.set_value("video","fullscreen",fullscreen)
 	config.set_value("video","high_quality",high_quality)
+	config.set_value("progress","tutorial_done",tutorial_done)
 	for i in CHANNELS.size():
 		config.set_value("audio",CHANNELS[i],volumes[i])
 	return config.save(path)
