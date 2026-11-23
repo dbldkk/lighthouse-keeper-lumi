@@ -341,6 +341,12 @@ func show_menu(mode: String) -> void:
 		menu_title.text = "Курс\nна материк"
 		menu_subtitle.text = ("День %d. Контрольная группа принята.\nВы держитесь курса по приборам. Голоса остаются на острове." if game.campaign.enabled else "День %d. Катер исправен, сигнал принят.\nВы оставили остров позади. Или вам так кажется?") % game.day
 		start_button.text = "Начать новую смену"
+		var ending: Dictionary = game.lore.ENDINGS.get(game.lore.ending, {}) if game.campaign.enabled else {}
+		if not ending.is_empty():
+			menu_title.text = ending.title
+			menu_subtitle.text = ending.subtitle + "\nЗаписи прежних смен: %d из %d." % [game.lore.count(), game.lore.total()]
+			ending_stamp.text = ending.stamp
+			game.lore.show_card()
 	elif mode == "loss":
 		menu_title.text = "Остров\nне отпускает"
 		menu_subtitle.text = "Смена закончилась. Свет и укреплённая\nхижина помогут пережить следующую попытку."

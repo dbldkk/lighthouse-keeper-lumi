@@ -190,7 +190,11 @@ func run() -> void:
 		if kind=="last":check(not take("radio") and not game.campaign.state.event_done,"Final night requires power before the confirming radio call")
 		if kind in ["blackout","last"]:
 			var fuel_before: int = game.inventory.fuel
-			check(take("beacon") and not game.campaign.state.blackout and game.lighthouse_on and game.inventory.fuel==fuel_before,"Night "+str(number)+" power reset is interactive and does not double-charge fuel")
+			var took_beacon := take("beacon")
+			if kind=="last":
+				check(game.lore.choice_open(),"Final night generator asks the keeper to choose")
+				game.lore.choose("light")
+			check(took_beacon and not game.campaign.state.blackout and game.lighthouse_on and game.inventory.fuel==fuel_before,"Night "+str(number)+" power reset is interactive and does not double-charge fuel")
 		if kind in ["static","false_call","last"]:
 			var heard := take("radio")
 			if not legacy_run and number in [11,13]:

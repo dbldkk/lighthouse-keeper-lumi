@@ -27,6 +27,7 @@ const BAL = preload("res://scripts/balance.gd")
 const SCARES = preload("res://scripts/scares.gd")
 const DREAD = preload("res://scripts/dread.gd")
 const HUNTER = preload("res://scripts/hunter.gd")
+const LORE = preload("res://scripts/lore.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -103,6 +104,7 @@ var camera_shake := 0.0
 var scares: Node
 var dread: Node
 var hunter: Node3D
+var lore: Node3D
 var escalation: Node
 ## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
 var last_safe_position := Vector3(3, 1.3, 4)
@@ -190,6 +192,10 @@ func _ready() -> void:
 	hunter.name = "Hunter"
 	hunter.game = self
 	add_child(hunter)
+	lore = LORE.new()
+	lore.name = "Lore"
+	lore.game = self
+	add_child(lore)
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -218,6 +224,7 @@ func _ready() -> void:
 	hud.root.add_child(viewer)
 	viewer.setup(self)
 	hunter.setup()
+	lore.setup()
 	camera.position = camera_focus + Vector3(29, 34, 40)
 	camera.look_at(camera_focus)
 	camera.size = camera_zoom
@@ -368,6 +375,8 @@ func start_shift() -> void:
 		dread.reset()
 	if is_instance_valid(hunter):
 		hunter.reset()
+	if is_instance_valid(lore):
+		lore.reset()
 	playing = true
 	paused = false
 	finished = false
@@ -1071,6 +1080,8 @@ func refresh_journal() -> void:
 		if entry.is_empty():
 			entry = island_events.journal_entry(id)
 		if entry.is_empty():
+			entry = lore.journal_entry(id)
+		if entry.is_empty():
 			entry = campaign.journal_entry(id)
 		if id == FIRST_SHIFT_DEMO.LOG_ID and first_shift_demo.active():
 			entry = FIRST_SHIFT_DEMO.LOG
@@ -1089,6 +1100,8 @@ func close_journal() -> void:
 
 func finish_shift(won: bool) -> void:
 	fishing.close()
+	if won and campaign.enabled and not first_shift_demo.active() and lore.ending.is_empty():
+		lore.ending = "light"
 	finished = true
 	last_run_won = won
 	player.enabled = false
@@ -1184,6 +1197,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			target_zoom = clampf(target_zoom + 2, 18, 38)
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
+	if lore.choice_open():
+		var pick: String = {KEY_1:"light", KEY_2:"dark", KEY_3:"truth"}.get(event.physical_keycode, "")
+		if pick == "truth" and not lore.complete():
+			pick = ""
+		if not pick.is_empty():
+			lore.choose(pick)
+		get_viewport().set_input_as_handled()
+		return
 	if campaign.code_open():
 		if event.physical_keycode == KEY_ESCAPE:campaign.close_code()
 		get_viewport().set_input_as_handled()
@@ -1200,6 +1221,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			turn_journal_page(-1 if event.physical_keycode == KEY_LEFT else 1)
 		elif event.physical_keycode in [KEY_UP, KEY_DOWN]:
 			hud.scroll_journal(-1 if event.physical_keycode == KEY_UP else 1)
+		elif event.physical_keycode == KEY_SPACE and not journal_entries.is_empty():
+			lore.replay(journal_entries[posmod(journal_page, journal_entries.size())])
 		get_viewport().set_input_as_handled()
 		return
 	if event.physical_keycode == KEY_ESCAPE and playing and not finished:
@@ -1233,7 +1256,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				survival.drink()
 		KEY_E:
 			if interaction_cooldown <= 0:
-				if not (hunter.hiding() and hunter.interact()) and not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not hunter.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
+				if not (hunter.hiding() and hunter.interact()) and not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not hunter.interact() and not lore.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
 					player.play_gesture("interact")
 		KEY_SPACE:
 			if lighthouse_interior.active:
@@ -1301,6 +1324,7 @@ func save_game(quiet: bool = false) -> bool:
 	state["extras"] = extras.save_data()
 	state["homestead"] = homestead.save_data()
 	state["photos"] = photo.save_data()
+	state["lore"] = lore.save_data()
 	for station in stations:
 		if station.station_id == "wood":
 			state.wood_remaining = station.remaining
@@ -1385,10 +1409,11 @@ func load_game() -> bool:
 	extras.restore(state.get("extras", {}))
 	homestead.restore(state.get("homestead", {}))
 	photo.restore(state.get("photos", {}))
+	lore.restore(state.get("lore", {}))
 	if int(state.get("version",0))<4:campaign.enabled = true
 	campaign.restore(state.get("campaign",{}) if int(state.get("version",0))>=4 else {},int(state.get("version",0))<4)
 	for entry in state.get("journal", []):
-		if entry not in journal_entries and (STORIES.has(entry) or RADIO_TUNER.ARCHIVE.has(entry) or not island_events.journal_entry(str(entry)).is_empty() or not campaign.journal_entry(str(entry)).is_empty()):
+		if entry not in journal_entries and (STORIES.has(entry) or RADIO_TUNER.ARCHIVE.has(entry) or not island_events.journal_entry(str(entry)).is_empty() or not campaign.journal_entry(str(entry)).is_empty() or not lore.journal_entry(str(entry)).is_empty()):
 			journal_entries.append(str(entry))
 	coastal_life.weather_mode = int(state.get("weather_mode", 0))
 	player.position = Vector3(state.position[0], state.position[1], state.position[2])

@@ -170,14 +170,11 @@ func intercept(id: String) -> int:
 				complete_first_watch("outside")
 				game.notify("Генератор работает ровно. За хижиной стихли шаги. Вернитесь к койке.", 7)
 				return 1
+		if id=="beacon" and state.blackout and game.day==final_night() and is_instance_valid(game.lore):
+			game.lore.open_final_choice()
+			return 1
 		if id=="beacon" and state.blackout:
-			state.blackout = false
-			game.lighthouse_on = true
-			state.beacon_charge = maxi(1,int(state.beacon_charge))
-			game.beacon.set_powered(true)
-			state.event_done = not state.need_radio
-			game.sound.interact("beacon")
-			game.notify("Питание восстановлено. "+("Теперь подтвердите сигнал на домашнем радио." if state.need_radio else "Возвращайтесь к хижине."),8)
+			restore_beacon()
 			return 1
 		if id=="radio" and not state.event_done and entry().night.kind in ["static","false_call","last"]:
 			if state.blackout:
@@ -190,6 +187,19 @@ func intercept(id: String) -> int:
 				confirm_night_radio()
 			return 1
 		return -1
+	return _intercept_day(id)
+
+## Питание маяка восстановлено ночью (обрыв или последняя ночь, выбор «зажечь»).
+func restore_beacon() -> void:
+	state.blackout = false
+	game.lighthouse_on = true
+	state.beacon_charge = maxi(1,int(state.beacon_charge))
+	game.beacon.set_powered(true)
+	state.event_done = not state.need_radio
+	game.sound.interact("beacon")
+	game.notify("Питание восстановлено. "+("Теперь подтвердите сигнал на домашнем радио." if state.need_radio else "Возвращайтесь к хижине."),8)
+
+func _intercept_day(id: String) -> int:
 	var index := next_index()
 	if index<0:return -1
 	var goal: Dictionary = entry().goals[index]
