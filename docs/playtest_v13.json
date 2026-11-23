@@ -1,0 +1,350 @@
+{
+  "careful": [
+    {
+      "catches": 0,
+      "dawn": true,
+      "day": 4,
+      "died": false,
+      "drain": {},
+      "ev_result": "",
+      "event": "",
+      "hides": 0,
+      "min_hp": 100.0,
+      "oil": 50.5,
+      "sanity": 100.0,
+      "seconds": 90.0
+    },
+    {
+      "catches": 0,
+      "dawn": true,
+      "day": 6,
+      "died": false,
+      "drain": {},
+      "ev_result": "",
+      "event": "ship",
+      "hides": 0,
+      "min_hp": 100.0,
+      "oil": 69.7,
+      "sanity": 100.0,
+      "seconds": 55.0
+    },
+    {
+      "catches": 2,
+      "dawn": true,
+      "day": 9,
+      "died": false,
+      "drain": {
+        "hunter": 70.0
+      },
+      "ev_result": "",
+      "event": "ship",
+      "hides": 3,
+      "min_hp": 30.0,
+      "oil": 69.8,
+      "sanity": 86.2,
+      "seconds": 55.0
+    },
+    {
+      "catches": 2,
+      "dawn": true,
+      "day": 11,
+      "died": false,
+      "drain": {
+        "hunter": 70.0
+      },
+      "ev_result": "",
+      "event": "rescuer",
+      "hides": 7,
+      "min_hp": 30.0,
+      "oil": 45.2,
+      "sanity": 54.7,
+      "seconds": 100.0
+    },
+    {
+      "catches": 1,
+      "dawn": true,
+      "day": 12,
+      "died": false,
+      "drain": {
+        "hunter": 35.0
+      },
+      "ev_result": "",
+      "event": "storm",
+      "hides": 6,
+      "min_hp": 65.0,
+      "oil": 64.4,
+      "sanity": 94.3,
+      "seconds": 65.0
+    }
+  ],
+  "dark": [
+    {
+      "catches": 1,
+      "dawn": false,
+      "day": 4,
+      "died": true,
+      "drain": {
+        "dark": 65.025000000001,
+        "hunter": 35.0
+      },
+      "ev_result": "",
+      "event": "",
+      "hides": 0,
+      "min_hp": 0.0,
+      "oil": 100.0,
+      "sanity": 0.0,
+      "seconds": 88.3
+    },
+    {
+      "catches": 0,
+      "dawn": true,
+      "day": 6,
+      "died": false,
+      "drain": {
+        "dark": 75.0000000000014
+      },
+      "ev_result": "",
+      "event": "ship",
+      "hides": 0,
+      "min_hp": 25.0,
+      "oil": 100.0,
+      "sanity": 7.0,
+      "seconds": 95.0
+    },
+    {
+      "catches": 2,
+      "dawn": false,
+      "day": 9,
+      "died": true,
+      "drain": {
+        "dark": 29.9999999999998,
+        "hunter": 70.0
+      },
+      "ev_result": "lost",
+      "event": "ship",
+      "hides": 0,
+      "min_hp": 0.0,
+      "oil": 100.0,
+      "sanity": 0.0,
+      "seconds": 64.9
+    },
+    {
+      "catches": 2,
+      "dawn": false,
+      "day": 11,
+      "died": true,
+      "drain": {
+        "dark": 29.9999999999998,
+        "hunter": 70.0
+      },
+      "ev_result": "shut",
+      "event": "rescuer",
+      "hides": 0,
+      "min_hp": 0.0,
+      "oil": 100.0,
+      "sanity": 0.0,
+      "seconds": 64.9
+    },
+    {
+      "catches": 2,
+      "dawn": false,
+      "day": 12,
+      "died": true,
+      "drain": {
+        "dark": 30.0749999999998,
+        "hunter": 70.0
+      },
+      "ev_result": "outage",
+      "event": "storm",
+      "hides": 0,
+      "min_hp": 0.0,
+      "oil": 100.0,
+      "sanity": 0.0,
+      "seconds": 65.0
+    }
+  ],
+  "nightmare": [
+    {
+      "catches": 0,
+      "dawn": true,
+      "day": 4,
+      "died": false,
+      "drain": {},
+      "ev_result": "",
+      "event": "",
+      "hides": 0,
+      "min_hp": 100.0,
+      "oil": 20.8,
+      "sanity": 97.0,
+      "seconds": 90.0
+    },
+    {
+      "catches": 0,
+      "dawn": true,
+      "day": 6,
+      "died": false,
+      "drain": {},
+      "ev_result": "",
+      "event": "ship",
+      "hides": 0,
+      "min_hp": 100.0,
+      "oil": 51.6,
+      "sanity": 100.0,
+      "seconds": 55.0
+    },
+    {
+      "catches": 1,
+      "dawn": true,
+      "day": 9,
+      "died": false,
+      "drain": {
+        "hunter": 45.0
+      },
+      "ev_result": "",
+      "event": "ship",
+      "hides": 3,
+      "min_hp": 55.0,
+      "oil": 51.7,
+      "sanity": 80.7,
+      "seconds": 55.0
+    },
+    {
+      "catches": 3,
+      "dawn": false,
+      "day": 11,
+      "died": true,
+      "drain": {
+        "hunter": 135.0
+      },
+      "ev_result": "shut",
+      "event": "rescuer",
+      "hides": 6,
+      "min_hp": 0.0,
+      "oil": 45.5,
+      "sanity": 34.3,
+      "seconds": 62.1
+    },
+    {
+      "catches": 2,
+      "dawn": true,
+      "day": 12,
+      "died": false,
+      "drain": {
+        "hunter": 90.0
+      },
+      "ev_result": "",
+      "event": "storm",
+      "hides": 3,
+      "min_hp": 10.0,
+      "oil": 42.9,
+      "sanity": 63.6,
+      "seconds": 65.0
+    }
+  ],
+  "pier": {
+    "0.5": "escaped",
+    "1.5": "escaped",
+    "2.5": "escaped",
+    "3.0": "grabbed"
+  },
+  "ship": [
+    {
+      "reaction": 0.5,
+      "result": "saved"
+    },
+    {
+      "reaction": 1.5,
+      "result": "saved"
+    },
+    {
+      "reaction": 2.5,
+      "result": "saved"
+    },
+    {
+      "reaction": 3.5,
+      "result": "saved"
+    },
+    {
+      "reaction": 4.5,
+      "result": "saved"
+    },
+    {
+      "reaction": 5.5,
+      "result": "lost"
+    }
+  ],
+  "wanderer": [
+    {
+      "catches": 0,
+      "dawn": true,
+      "day": 4,
+      "died": false,
+      "drain": {},
+      "ev_result": "",
+      "event": "",
+      "hides": 0,
+      "min_hp": 100.0,
+      "oil": 50.5,
+      "sanity": 93.3,
+      "seconds": 90.0
+    },
+    {
+      "catches": 0,
+      "dawn": true,
+      "day": 6,
+      "died": false,
+      "drain": {},
+      "ev_result": "",
+      "event": "ship",
+      "hides": 0,
+      "min_hp": 100.0,
+      "oil": 69.7,
+      "sanity": 100.0,
+      "seconds": 55.0
+    },
+    {
+      "catches": 0,
+      "dawn": true,
+      "day": 9,
+      "died": false,
+      "drain": {},
+      "ev_result": "",
+      "event": "ship",
+      "hides": 0,
+      "min_hp": 100.0,
+      "oil": 69.7,
+      "sanity": 100.0,
+      "seconds": 55.0
+    },
+    {
+      "catches": 3,
+      "dawn": false,
+      "day": 11,
+      "died": true,
+      "drain": {
+        "hunter": 105.0
+      },
+      "ev_result": "shut",
+      "event": "rescuer",
+      "hides": 0,
+      "min_hp": 0.0,
+      "oil": 49.6,
+      "sanity": 27.7,
+      "seconds": 91.5
+    },
+    {
+      "catches": 0,
+      "dawn": true,
+      "day": 12,
+      "died": false,
+      "drain": {},
+      "ev_result": "",
+      "event": "storm",
+      "hides": 0,
+      "min_hp": 100.0,
+      "oil": 64.2,
+      "sanity": 100.0,
+      "seconds": 65.0
+    }
+  ]
+}

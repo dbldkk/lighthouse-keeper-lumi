@@ -1,10 +1,11 @@
 extends CanvasLayer
 const MAP = preload("res://scripts/island_map.gd")
+const UI = preload("res://scripts/ui_style.gd")
 const FISHING_UI = preload("res://scripts/fishing_ui.gd")
-const INK := Color("102b32")
-const PAPER := Color("e9e3ce")
-const GOLD := Color("deb777")
-const MUTED := Color("97b1ac")
+const INK := Color("15110c")
+const PAPER := Color("dccfb0")
+const GOLD := Color("c39a55")
+const MUTED := Color("9a8f7a")
 var game: Node
 var root: Control
 var game_ui: Control
@@ -55,6 +56,7 @@ var stamina_bar: ProgressBar
 var fishing_overlay: Control
 var danger: ColorRect
 var drain_panel: Control
+var menu_stamp: TextureRect
 var drain_title: Label
 var drain_hint: Label
 var drain_cause := ""
@@ -83,6 +85,7 @@ func _ready() -> void:
 	root = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UI.theme()
 	add_child(root)
 	atmosphere = ColorRect.new()
 	atmosphere.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -115,17 +118,23 @@ func _ready() -> void:
 	root.add_child(tuner)
 	tuner.setup(self)
 
-func style(bg: Color, border: Color = Color.TRANSPARENT, radius: int = 9) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
-	box.bg_color = bg
-	box.border_color = border
-	box.set_border_width_all(1 if border.a > 0 else 0)
-	box.set_corner_radius_all(radius)
-	box.content_margin_left = 12
-	box.content_margin_right = 12
-	box.content_margin_top = 10
-	box.content_margin_bottom = 10
-	return box
+## v1.3: вместо гладких скруглённых плашек — листы журнала. Тёмный фон → просмолённый лист,
+## светлый → бумага. Мелкие элементы (полосы прокрутки) — плоские, без скруглений.
+func style(bg: Color, border: Color = Color.TRANSPARENT, radius: int = 9) -> StyleBox:
+	if radius <= 4 or bg.a <= .01:
+		var box := StyleBoxFlat.new()
+		box.bg_color = Color(bg.r * .9 + .06, bg.g * .85 + .04, bg.b * .7 + .02, bg.a) if bg.get_luminance() < .5 else bg
+		box.border_color = border
+		box.set_border_width_all(1 if border.a > 0 else 0)
+		box.draw_center = bg.a > .01
+		box.content_margin_left = 12
+		box.content_margin_right = 12
+		box.content_margin_top = 10
+		box.content_margin_bottom = 10
+		return box
+	if bg.get_luminance() > .45:
+		return UI.card(Color(1, 1, 1, bg.a))
+	return UI.tar(clampf(bg.a + .04, 0, 1))
 
 func panel(parent: Control, rect: Rect2, color: Color = Color(0.035, 0.11, 0.14, 0.87)) -> Panel:
 	var node := Panel.new()
@@ -134,6 +143,7 @@ func panel(parent: Control, rect: Rect2, color: Color = Color(0.035, 0.11, 0.14,
 	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	node.add_theme_stylebox_override("panel", style(color, Color(0.5, 0.67, 0.63, 0.17)))
 	parent.add_child(node)
+	UI.tilt(node, .35)
 	return node
 
 func text(parent: Control, content: String, rect: Rect2, font_size: int = 18, color: Color = PAPER) -> Label:
@@ -143,6 +153,9 @@ func text(parent: Control, content: String, rect: Rect2, font_size: int = 18, co
 	label.size = rect.size
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
+	if font_size <= 12:
+		# мелкие бирки — машинописью: тонкий книжный шрифт на таком кегле не читается
+		label.add_theme_font_override("font", UI.font("mono"))
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(label)
 	return label
@@ -152,13 +165,8 @@ func progress(parent: Control, rect: Rect2, color: Color) -> ProgressBar:
 	bar.position = rect.position
 	bar.size = rect.size
 	bar.show_percentage = false
-	var background := style(Color("253e42"), Color.TRANSPARENT, 3)
-	var fill := style(color, Color.TRANSPARENT, 3)
-	for box in [background, fill]:
-		box.content_margin_left = 0
-		box.content_margin_right = 0
-		box.content_margin_top = 0
-		box.content_margin_bottom = 0
+	var background := UI.bar_box(false, color)
+	var fill := UI.bar_box(true, color.lerp(Color("c9b48a"), .25))
 	bar.add_theme_stylebox_override("background", background)
 	bar.add_theme_stylebox_override("fill", fill)
 	parent.add_child(bar)
@@ -170,7 +178,7 @@ func build_game_ui() -> void:
 	game_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	game_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(game_ui)
-	text(game_ui, "СМОТРИТЕЛЬ МАЯКА", Rect2(32, 25, 440, 30), 22, PAPER)
+	text(game_ui, "СМОТРИТЕЛЬ МАЯКА", Rect2(32, 25, 440, 30), 22, PAPER).add_theme_font_override("font", UI.font("bold"))
 	text(game_ui, "ПУТЬ С ОСТРОВА   /   ОСТРОВ СЕВЕРНЫЙ", Rect2(33, 59, 420, 22), 12, GOLD)
 	task_panel = panel(game_ui, Rect2(32, 119, 340, 320))
 	text(game_ui, "ЖУРНАЛ СМОТРИТЕЛЯ", Rect2(51, 137, 300, 25), 13, GOLD)
@@ -219,7 +227,7 @@ func build_game_ui() -> void:
 	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	message_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	message_label.add_theme_color_override("font_shadow_color", Color("102b32"))
+	message_label.add_theme_color_override("font_shadow_color", Color("15110c"))
 	message_label.add_theme_constant_override("shadow_offset_x", 2)
 	message_label.add_theme_constant_override("shadow_offset_y", 2)
 	demo_hint_panel = panel(game_ui, Rect2(385, 25, 670, 58))
@@ -239,12 +247,19 @@ func build_game_ui() -> void:
 	root.add_child(fade_rect)
 	drain_panel = Control.new()
 	drain_panel.name = "DrainWarning"
-	drain_panel.position = Vector2(470, 186)
+	drain_panel.position = Vector2(470, 744)
 	drain_panel.size = Vector2(500, 58)
 	drain_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	game_ui.add_child(drain_panel)
+	var drain_bg := Panel.new()
+	drain_bg.size = drain_panel.size + Vector2(0, 4)
+	drain_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drain_bg.add_theme_stylebox_override("panel", UI.strip())
+	drain_panel.add_child(drain_bg)
+	UI.stamp(drain_panel, UI.STAMP_DANGER, Vector2(-62, -10), .3, .85)
 	drain_title = text(drain_panel, "", Rect2(0, 2, 500, 24), 17, Color("ff9a7a"))
 	drain_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	drain_title.add_theme_font_override("font", UI.font("bold"))
 	drain_hint = text(drain_panel, "", Rect2(0, 28, 500, 22), 13, PAPER)
 	drain_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	drain_panel.hide()
@@ -274,11 +289,12 @@ func make_button(parent: Control, content: String, at: Vector2, callback: Callab
 	node.position = at
 	node.size = Vector2(310, 51)
 	node.add_theme_font_size_override("font_size", 18)
-	node.add_theme_color_override("font_color", INK if primary else PAPER)
-	node.add_theme_color_override("font_hover_color", INK)
-	node.add_theme_stylebox_override("normal", style(GOLD if primary else Color(0.06, 0.17, 0.19, 0.9), Color(0.6, 0.72, 0.67, 0.2)))
-	node.add_theme_stylebox_override("hover", style(Color("ead2a0")))
-	node.add_theme_stylebox_override("pressed", style(Color("b99763")))
+	node.set_meta("primary", primary)
+	node.add_theme_color_override("font_color", Color("e6b77a") if primary else PAPER)
+	node.add_theme_color_override("font_hover_color", Color("f1e6c8"))
+	node.add_theme_stylebox_override("normal", UI.button_box("pencil_light"))
+	node.add_theme_stylebox_override("hover", UI.button_box("hover"))
+	node.add_theme_stylebox_override("pressed", UI.button_box("hover"))
 	node.pressed.connect(callback)
 	parent.add_child(node)
 	return node
@@ -306,6 +322,24 @@ func build_menu() -> void:
 	texture.height = 2
 	veil.texture = texture
 	menu.add_child(veil)
+	# v1.3: страница вахтенного журнала вместо стеклянной плашки
+	var sheet := Panel.new()
+	sheet.name = "LogbookPage"
+	sheet.position = Vector2(30, 74)
+	sheet.size = Vector2(770, 800)
+	sheet.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sheet.add_theme_stylebox_override("panel", UI.paper())
+	sheet.pivot_offset = sheet.size * .5
+	sheet.rotation_degrees = -.8
+	menu.add_child(sheet)
+	var smudge := TextureRect.new()
+	smudge.texture = UI.SMUDGE
+	smudge.position = Vector2(640, 760)
+	smudge.size = Vector2(96, 96)
+	smudge.modulate = Color(1, 1, 1, .55)
+	smudge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sheet.add_child(smudge)
+	menu_stamp = UI.stamp(sheet, UI.STAMP_RECORDED, Vector2(520, 70), .62, .7)
 	title_mark = TextureRect.new()
 	title_mark.texture = BRAND_MARK
 	title_mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -315,10 +349,8 @@ func build_menu() -> void:
 	menu.add_child(title_mark)
 	text(menu, "СЕВЕРНЫЙ БЕРЕГ    /    ИГРА НА GODOT", Rect2(66, 108, 650, 26), 13, GOLD)
 	menu_title = text(menu, "Смотритель\nмаяка", Rect2(60, 203, 650, 195), 71, PAPER)
-	var serif := SystemFont.new()
-	serif.font_names = PackedStringArray(["Georgia", "Noto Serif"])
-	menu_title.add_theme_font_override("font", serif)
-	menu_subtitle = text(menu, "Один остров. Одна смена.\nСохраните свет — и дождитесь рассвета.", Rect2(66, 426, 530, 67), 20, MUTED)
+	menu_title.add_theme_font_override("font", UI.font("bold"))
+	menu_subtitle = text(menu, "Один остров. Одна смена.\nСохраните свет — и дождитесь рассвета.", Rect2(66, 416, 560, 86), 20, MUTED)
 	menu_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	start_button = make_button(menu, "Начать смену", Vector2(66, 535), func(): game.start_or_resume(), true)
 	first_shift_button = make_button(menu, "Демо · Первая смена", Vector2(66, 601), func(): game.start_first_shift_demo())
@@ -334,14 +366,18 @@ func build_menu() -> void:
 	save_button = make_button(menu, "Сохранить у журнала", Vector2(66, 667), func(): game.request_save())
 	exit_button = make_button(menu, "Выйти", Vector2(66, 733), func(): get_tree().quit())
 	menu.move_child(continue_button, start_button.get_index() + 1)
-	var focus := style(Color.TRANSPARENT, Color("c6a873"), 9)
-	focus.draw_center = false
-	focus.set_border_width_all(2)
+	var focus := StyleBoxEmpty.new()
 	for button in [start_button, first_shift_button, demo_button, title_button, settings_button, tutorial_button, continue_button, save_button, exit_button, difficulty_button, records_button]:
 		button.add_theme_stylebox_override("focus", focus)
 	text(menu, "Учебная демоверсия  •  Путь с острова\nВлад Людкевич · Костя Котельников\nАндрей Виговский · Артём Артамонов", Rect2(66, 809, 680, 69), 12, MUTED)
 	ending_stamp = text(menu, "", Rect2(785,778,555,48), 17, PAPER)
 	ending_stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	UI.inkify(menu)
+	ending_stamp.add_theme_color_override("font_color", PAPER)
+	ending_stamp.add_theme_font_override("font", UI.font("mono"))
+	menu_subtitle.add_theme_font_override("font", UI.font("hand"))
+	menu_subtitle.add_theme_font_size_override("font_size", 24)
+	menu_subtitle.add_theme_color_override("font_color", UI.INK_BLUE)
 	show_menu("title")
 
 func show_menu(mode: String) -> void:
@@ -351,7 +387,10 @@ func show_menu(mode: String) -> void:
 	game_ui.hide()
 	game.sound.set_music(mode)
 	menu_art.visible = mode in ["win","demo_win"]
-	title_mark.visible = mode in ["title","win","demo_win"]
+	if is_instance_valid(menu_stamp):
+		menu_stamp.texture = UI.STAMP_DANGER if mode in ["loss", "demo_loss"] else UI.STAMP_RECORDED
+		menu_stamp.visible = mode != "pause"
+	title_mark.visible = false   # v1.3: «иконка приложения» выбивалась из журнального стиля
 	ending_stamp.visible = menu_art.visible
 	ending_stamp.text = "СВЯЗЬ ПОДТВЕРЖДЕНА   /   06:45" if mode=="demo_win" else "КАТЕР «СЕВЕРНЫЙ»   /   КУРС НА МАТЕРИК"
 	var in_episode: bool = game.first_shift_demo.active()
@@ -435,7 +474,7 @@ func update_difficulty_button() -> void:
 		return
 	var d: String = game.preferences.difficulty
 	difficulty_button.text = "Сложность: " + game.DIFFICULTY.title(d)
-	difficulty_button.add_theme_color_override("font_color", Color("ff8a6a") if d == "nightmare" else PAPER)
+	difficulty_button.add_theme_color_override("font_color", UI.RUST if d == "nightmare" else UI.INK)
 
 func cycle_difficulty() -> void:
 	game.preferences.difficulty = game.DIFFICULTY.next(game.preferences.difficulty)

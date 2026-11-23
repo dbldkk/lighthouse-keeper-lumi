@@ -119,7 +119,6 @@ func hunter_shots() -> void:
 	await create_timer(.3).timeout
 	quiet()
 	var pr = game.hunter.presence
-	print("DBG far=", far, " me=", game.player.global_position, " pts=", pr.overlay_points, " vis=", game.hunter.body.visible, " night=", game.is_night(), " glint=", pr.glints[0].global_position, " paused=", game.paused, " menu=", game.hud.menu.visible)
 	await shot("01_hunter_far_eyes")
 	game.player.lantern_on = true
 	var mid := open_spot(me - Vector3(0, 1.2, 0), 5, 7)
@@ -140,29 +139,216 @@ func hunter_shots() -> void:
 	game.hunter.presence.blink_clock = 99
 	await create_timer(.4).timeout
 	quiet()
-	print("DBG s=", s, " me=", game.player.global_position, " refl=", pr.reflection_visible, " pts=", pr.overlay_points)
 	await shot("03_hunter_water_reflection")
 	game.hunter.preview_freeze = false
 	game.hunter.visual.resume_tree()
 
 func menu_shots() -> void:
-	pass
+	if game.playing:
+		game.return_to_title()
+	game.preferences.difficulty = "nightmare"
+	game.hud.show_menu("title")
+	await create_timer(.5).timeout
+	await shot("10_menu_difficulty_nightmare")
+	game.preferences.difficulty = "normal"
+	game.hud.show_menu("title")
+
+func ev_night(day: int, kind: String) -> Node:
+	if not game.playing:
+		game.start_shift()
+		game.tutorial.stop()
+	game.hunter.reset()
+	game.hunter.enabled = false
+	game.night_raids.set_process(false)
+	game.clear_enemies()
+	night(day)
+	game.campaign.state.night_clock = 0
+	var ev: Node = game.night_events
+	ev.force(kind)
+	return ev
 
 func events_shots() -> void:
-	pass
+	# шторм: обрыв питания
+	var ev := ev_night(5, "storm")
+	game.lighthouse_on = true
+	game.beacon.set_powered(true)
+	place(Vector3(-4.5, 1.2, -3.0), 20)
+	game.player.lantern_on = true
+	await create_timer(.6).timeout
+	quiet()
+	ev.outage()
+	ev.flash_light.light_energy = 3.5
+	game.radio.reset()
+	await create_timer(.25).timeout
+	await shot("04_storm_outage")
+	# туман
+	ev = ev_night(3, "fog")
+	ev.fog = 1.0
+	game.lighthouse_on = true
+	game.beacon.set_powered(true)
+	place(Vector3(4.4, 1.2, 9.4), 18)
+	game.player.lantern_on = true
+	await create_timer(1.0).timeout
+	quiet()
+	await shot("05_thick_fog")
+	ev.fog = 0
+	# сейнер у камней: смотритель у сигнального фонаря, камень вспыхнул
+	ev = ev_night(6, "ship")
+	game.lighthouse_on = true
+	game.beacon.set_powered(true)
+	ev.clock = ev.SHIP_START + .1
+	ev.ship_s = ev.rock_s(0) - 5.0
+	place(ev.SIGNAL_LAMP + Vector3(.6, .3, .4), 26)
+	game.player.lantern_on = true
+	await create_timer(2.5).timeout
+	game.camera_focus = ev.SIGNAL_LAMP.lerp(ev.ship.global_position, .6) + Vector3.UP
+	game.clear_enemies()
+	quiet()
+	ev.signal_flash = .6
+	await shot("06_ship_guiding")
+	# ложный спасатель: у двери изнутри
+	ev = ev_night(11, "rescuer")
+	game.enter_building("cabin")
+	await create_timer(.3).timeout
+	game.player.position = game.building_interiors.spawn_at("cabin")
+	ev.clock = ev.RESCUER_START + 13.5
+	ev.rescuer_phase = 3
+	await create_timer(.5).timeout
+	quiet()
+	game.notify("Он повторяет одно и то же — слово в слово, тем же голосом.", 8)
+	for i in 6:
+		game.hud.overlay.card_time = 0
+		game.hud.overlay.alert_time = 0
+		await process_frame
+	await create_timer(.15).timeout
+	game.hud.overlay.card_time = 0
+	game.hud.overlay.alert_time = 0
+	await process_frame
+	await shot("07_fake_rescuer_door")
+	game.exit_building()
+	game.hunter.enabled = true
 
 func water_shots() -> void:
-	pass
+	ev_night(6, "")
+	game.night_events.reset()
+	var lk: Node = game.water_lurker
+	var edge := Vector3(18.5, 1.45, 7.0)
+	place(edge, 14)
+	game.player.lantern_on = true
+	game.lighthouse_on = true
+	await create_timer(.8).timeout
+	quiet()
+	lk._start_bubbling()
+	lk.timer = 99
+	await create_timer(.8).timeout
+	await shot("08_pier_water_bubbling")
+	lk._grab()
+	lk.timer = lk.DRAG_SECONDS * .55
+	lk.set_process(false)
+	lk._animate(.016)
+	game.player.global_position = edge
+	await create_timer(.2).timeout
+	await shot("09_pier_lurker_grab")
+	lk.reset()
+	lk.set_process(true)
 
+var frame_no := 0
+func frame(n := 1, gap := .1) -> void:
+	for i in n:
+		await create_timer(gap).timeout
+		await RenderingServer.frame_post_draw
+		var img := root.get_texture().get_image()
+		img.resize(640, 400, Image.INTERPOLATE_BILINEAR)
+		DirAccess.make_dir_recursive_absolute(out.path_join("frames"))
+		img.save_png(out.path_join("frames/f%03d.png" % frame_no))
+		frame_no += 1
+
+## Кадры для трейлера-GIF и обложки itch.io (out = /workspace/games/itch-kit).
 func itch_shots() -> void:
-	pass
+	game.hud.show_menu("title")
+	await frame(6, .15)
+	# охотник приближается в темноте
+	game.start_shift()
+	game.tutorial.stop()
+	game.night_raids.set_process(false)
+	night(4)
+	game.lighthouse_on = false
+	game.player.lantern_on = false
+	var me := Vector3(4.4, 1.2, 10.4)
+	place(me, 18)
+	await create_timer(1.0).timeout
+	quiet()
+	var far := open_spot(me - Vector3(0, 1.2, 0), 11, 15)
+	for i in 14:
+		var at := far.lerp(me - Vector3(0, 1.2, 0), i / 22.0)
+		hunter_pose(at, me, "stalk", .1 * i)
+		game.camera_focus = (far + me) * .5 + Vector3.UP
+		quiet()
+		await frame(1, .06)
+	# фонарь ловит его
+	game.player.lantern_on = true
+	for i in 6:
+		await frame(1, .1)
+	game.hunter.preview_freeze = false
+	game.hunter.reset()
+	game.hunter.enabled = false
+	# шторм
+	var ev := ev_night(5, "storm")
+	game.lighthouse_on = true
+	game.beacon.set_powered(true)
+	place(Vector3(-4.5, 1.2, -3.0), 20)
+	game.player.lantern_on = true
+	await create_timer(.5).timeout
+	quiet()
+	await frame(3, .1)
+	ev.outage()
+	for i in 8:
+		if i % 3 == 0:
+			ev.flash_light.light_energy = 4.0
+		await frame(1, .08)
+	# туман
+	ev = ev_night(3, "fog")
+	ev.fog = 1.0
+	place(Vector3(4.4, 1.2, 9.4), 18)
+	game.lighthouse_on = true
+	await create_timer(.8).timeout
+	quiet()
+	await frame(6, .12)
+	ev.fog = 0
+	# сейнер
+	ev = ev_night(6, "ship")
+	ev.clock = ev.SHIP_START + .1
+	ev.ship_s = ev.rock_s(0) - 6.0
+	place(ev.SIGNAL_LAMP + Vector3(.6, .3, .4), 26)
+	await create_timer(1.5).timeout
+	game.camera_focus = ev.SIGNAL_LAMP.lerp(ev.ship.global_position, .6) + Vector3.UP
+	quiet()
+	await frame(8, .12)
+	# причал
+	ev_night(6, "")
+	game.night_events.reset()
+	var lk: Node = game.water_lurker
+	var edge := Vector3(18.5, 1.45, 7.0)
+	place(edge, 14)
+	await create_timer(.6).timeout
+	quiet()
+	lk._start_bubbling()
+	lk.timer = 99
+	await frame(6, .1)
+	lk._grab()
+	lk.timer = lk.DRAG_SECONDS
+	for i in 6:
+		lk.tick(.12)
+		await frame(1, .05)
+	game.hud.show_menu("title")
+	await frame(4, .15)
 
 ## Интерфейс до/после переделки (UI_TAG=before|after).
 func ui_shots() -> void:
 	var tag := OS.get_environment("UI_TAG")
 	if tag.is_empty():
 		tag = "after"
-	game.hud.show_menu("main")
+	game.hud.show_menu("title")
 	await create_timer(.5).timeout
 	await shot("ui_%s_1_menu" % tag)
 	game.hud.settings_panel.open()

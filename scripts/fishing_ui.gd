@@ -1,9 +1,9 @@
 extends Control
 ## Собственный интерфейс мини-игры в морской палитре проекта.
-const INK := Color("102b32")
-const PAPER := Color("e9e3ce")
-const GOLD := Color("deb777")
-const MUTED := Color("97b1ac")
+const INK := Color("15110c")
+const PAPER := Color("dccfb0")
+const GOLD := Color("c39a55")
+const MUTED := Color("8e8370")
 const GREEN := Color("8bbd96")
 const RED := Color("cf8c75")
 const PROVISIONS = preload("res://scripts/provisions.gd")

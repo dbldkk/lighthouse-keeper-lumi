@@ -793,7 +793,7 @@ func update_atmosphere() -> void:
 	if thick > 0:
 		# густой туман особой ночи: видно лишь несколько метров вокруг
 		env.fog_density += .045 * thick
-		env.fog_light_color = env.fog_light_color.lerp(Color("3b464e"), .6 * thick)
+		env.fog_light_color = env.fog_light_color.lerp(Color("5a666c"), .75 * thick)
 		env.fog_height_density = lerpf(env.fog_height_density, .02, thick)
 	env.fog_density *= preferences.fog_scale()
 

@@ -107,6 +107,7 @@ func run() -> void:
 	h.holding_forced = false
 	h._tick_breath(.1)
 	hp = game.health
+	h.mercy_time = 0   # отдельный сценарий: передышка после прошлого броска не действует
 	h._sniff_hiding()
 	check(not h.hiding() and game.health < hp, "Breathing next to it gets you dragged out")
 	game.health = 100
@@ -134,6 +135,7 @@ func run() -> void:
 	h.body.global_position = wardrobe.at + Vector3(2.5, 0, 0)
 	h.holding_forced = true
 	hp = game.health
+	h.mercy_time = 0
 	for i in 10:
 		h._tick_breath(1.0)
 	check(not h.hiding() and game.health < hp, "Running out of breath makes you gasp and be found")

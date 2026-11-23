@@ -184,23 +184,27 @@ func _ensure_toast() -> void:
 		return
 	toast = PanelContainer.new()
 	toast.name = "AchievementToast"
-	toast.add_theme_stylebox_override("panel", game.hud.style(Color(0.03, 0.08, 0.1, .94), Color("deb777"), 9))
-	toast.position = Vector2(1440 - 430, 108)
+	toast.add_theme_stylebox_override("panel", game.hud.UI.card())
+	toast.position = Vector2(1440 - 440, 292)
+	toast.rotation_degrees = .9
 	toast.custom_minimum_size = Vector2(400, 74)
 	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var box := VBoxContainer.new()
 	toast.add_child(box)
 	toast_title = Label.new()
-	toast_title.add_theme_font_size_override("font_size", 17)
-	toast_title.add_theme_color_override("font_color", Color("deb777"))
+	toast_title.add_theme_font_override("font", game.hud.UI.font("hand"))
+	toast_title.add_theme_font_size_override("font_size", 27)
+	toast_title.add_theme_color_override("font_color", game.hud.UI.INK)
 	box.add_child(toast_title)
 	toast_text = Label.new()
-	toast_text.add_theme_font_size_override("font_size", 14)
-	toast_text.add_theme_color_override("font_color", Color("e9e3ce"))
+	toast_text.add_theme_font_size_override("font_size", 15)
+	toast_text.add_theme_color_override("font_color", Color("3a3226"))
 	toast_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	toast_text.custom_minimum_size = Vector2(380, 0)
 	box.add_child(toast_text)
 	game.hud.root.add_child(toast)
+	var st: TextureRect = game.hud.UI.stamp(toast_title, game.hud.UI.STAMP_RECORDED, Vector2(300, 6), .22, .7)   # не в контейнере — иначе растянется
+	st.name = "Stamp"
 	toast.hide()
 
 func _tick_toast(delta: float) -> void:
@@ -217,7 +221,7 @@ func _tick_toast(delta: float) -> void:
 	if toast == null:
 		return
 	var a: Array = toast_queue.pop_front()
-	toast_title.text = "★  Достижение: " + a[1]
+	toast_title.text = "Достижение: " + a[1]
 	toast_text.text = a[2]
 	toast.show()
 	toast.move_to_front()
@@ -236,15 +240,17 @@ func open_records() -> void:
 	panel.name = "RecordsPanel"
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, .72)
+	dim.color = Color(.03, .025, .02, .8)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(dim)
 	var card := Panel.new()
-	card.add_theme_stylebox_override("panel", hud.style(Color(0.03, 0.08, 0.1, .97), Color("deb777"), 12))
+	card.add_theme_stylebox_override("panel", hud.UI.paper())
+	card.pivot_offset = Vector2(550, 360)
+	card.rotation_degrees = .5
 	card.position = Vector2(170, 90)
 	card.size = Vector2(1100, 720)
 	panel.add_child(card)
-	hud.text(card, "Рекорды и достижения", Rect2(40, 26, 700, 44), 32, hud.PAPER)
+	hud.text(card, "Рекорды и достижения", Rect2(40, 26, 700, 44), 32, hud.PAPER).add_theme_font_override("font", hud.UI.font("bold"))
 	hud.text(card, "Открыто %d из %d" % [unlocked.size(), LIST.size()], Rect2(700, 38, 360, 26), 16, hud.GOLD).horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hud.text(card, "СТАТИСТИКА", Rect2(40, 92, 300, 22), 13, hud.GOLD)
 	var y := 124
@@ -256,12 +262,18 @@ func open_records() -> void:
 	y = 120
 	for a in LIST:
 		var got := unlocked.has(a[0])
-		hud.text(card, ("★ " if got else "☆ ") + a[1], Rect2(430, y, 300, 24), 17, hud.GOLD if got else hud.MUTED)
+		var name_label: Label = hud.text(card, a[1], Rect2(468, y, 230, 24), 17, hud.GOLD if got else hud.MUTED)
+		if got:
+			hud.UI.stamp(card, hud.UI.STAMP_RECORDED, Vector2(416, y - 2), .13, .9)
+		else:
+			hud.text(card, "—", Rect2(428, y, 20, 24), 17, hud.MUTED)
+		name_label.add_theme_font_override("font", hud.UI.font("bold") if got else hud.UI.font())
 		var d: Label = hud.text(card, a[2], Rect2(700, y + 2, 370, 40), 13, hud.PAPER if got else Color(hud.MUTED, .7))
 		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		y += 46
 	var close: Button = hud.make_button(card, "Закрыть", Vector2(40, 650), func(): close_records())
 	close.size = Vector2(180, 44)
+	hud.UI.inkify(card)
 	hud.root.add_child(panel)
 	close.grab_focus()
 

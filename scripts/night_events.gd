@@ -223,11 +223,14 @@ func _build_ship() -> void:
 	ship = Node3D.new()
 	ship.name = "LostSeiner"
 	add_child(ship)
-	var hull := _mat(Color("1d2326"))
+	var hull := _mat(Color("3a3c38"))
 	_box(ship, Vector3(1.7, .8, 5.0), Vector3(0, .2, 0), hull)
 	_box(ship, Vector3(1.2, .35, 1.3), Vector3(0, .75, 2.4), hull)
-	_box(ship, Vector3(1.3, 1.0, 1.6), Vector3(0, 1.1, -.8), _mat(Color("2c3134")))
-	_box(ship, Vector3(1.0, .25, .05), Vector3(0, 1.25, 0.02), _mat(Color("ffcf7a"), 1.6))   # окна рубки
+	_box(ship, Vector3(1.3, 1.0, 1.6), Vector3(0, 1.1, -.8), _mat(Color("8a8676")))
+	_box(ship, Vector3(1.74, .12, 5.02), Vector3(0, .45, 0), _mat(Color("7a2a20")))   # полоса по борту
+	_box(ship, Vector3(1.0, .3, .05), Vector3(0, 1.25, 0.02), _mat(Color("ffcf7a"), 3.0))   # окна рубки
+	_box(ship, Vector3(.05, .3, 1.2), Vector3(.66, 1.25, -.8), _mat(Color("ffcf7a"), 3.0))
+	_box(ship, Vector3(.05, .3, 1.2), Vector3(-.66, 1.25, -.8), _mat(Color("ffcf7a"), 3.0))
 	_box(ship, Vector3(.12, 3.2, .12), Vector3(0, 2.0, .9), hull)
 	ship_lamp = MeshInstance3D.new()
 	var s := SphereMesh.new()
@@ -239,8 +242,8 @@ func _build_ship() -> void:
 	ship.add_child(ship_lamp)
 	ship_light = OmniLight3D.new()
 	ship_light.light_color = Color("ffc27a")
-	ship_light.light_energy = 2.2
-	ship_light.omni_range = 9
+	ship_light.light_energy = 3.2
+	ship_light.omni_range = 12
 	ship_light.position = Vector3(0, 2.5, 0)
 	ship.add_child(ship_light)
 	_place_ship(0)
@@ -274,19 +277,24 @@ func _build_rocks() -> void:
 			mi.mesh = s
 			mi.position = Vector3(k * .7 - .6, -.15 + k * .1, k * .5 - .4)
 			mi.scale = Vector3(1.2, .8, 1)
-			mi.material_override = _mat(Color("15191a"))
+			mi.material_override = _mat(Color("4a4d4a"))
 			r.add_child(mi)
-		var foam := MeshInstance3D.new()
-		var t := TorusMesh.new()
-		t.inner_radius = 1.5
-		t.outer_radius = 1.8
-		foam.mesh = t
-		foam.position = Vector3(0, .05, 0)
-		var fm := _mat(Color(.8, .88, .9, .35))
+		# пена у камня: рваные плоские клочья, а не ровное кольцо
+		var fm := _mat(Color(.85, .9, .92, .28))
 		fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		foam.material_override = fm
-		r.add_child(foam)
+		for k in 9:
+			var foam := MeshInstance3D.new()
+			var sp := SphereMesh.new()
+			sp.radius = rng.randf_range(.25, .55)
+			sp.height = sp.radius * 2
+			foam.mesh = sp
+			var a := k * TAU / 9 + rng.randf_range(-.3, .3)
+			foam.position = Vector3(cos(a), 0, sin(a)) * rng.randf_range(1.0, 1.7) + Vector3(0, .02, 0)
+			foam.scale = Vector3(1.6, .06, .8)
+			foam.rotation.y = a
+			foam.material_override = fm
+			r.add_child(foam)
 		var warn := OmniLight3D.new()
 		warn.name = "Warn"
 		warn.light_color = Color("ff5a3a")

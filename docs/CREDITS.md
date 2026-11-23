@@ -61,3 +61,14 @@
 Цветокоррекция мира для хоррор-оформления реализована в screen_atmosphere.gdshader: приглушение цвета, холодные тени, сохранение тёплых источников света, виньетка и процедурное зерно. Внешние текстуры или фильтры для этого не используются.
 
 Для переработки окружения natural_geometry.gd создаёт ветви, хвойные побеги, листья, траву и деформированные камни. pine_needles.gdshader формирует силуэт хвои и ветер, weathered_surface.gdshader — фактуру материалов. Геометрия и материалы разработаны кодом для проекта, сторонние ассеты и фотографии не используются.
+
+
+## Шрифты интерфейса (v1.3)
+
+Лицензия **SIL Open Font License 1.1**, тексты лицензий — `assets/fonts/OFL-*.txt`:
+
+* **Old Standard TT** — © 2011 The Old Standard Project Authors (Alexey Kryukov), https://github.com/googlefonts/OldStandardTT
+* **Caveat** — © 2014 The Caveat Project Authors (Impallari Type), https://github.com/googlefonts/caveat
+* **PT Mono** — © 2011 ParaType Ltd., https://www.paratype.com/public
+
+Текстуры бумаги, рамки, мазки и штампы — процедурные (`tools/ui_art/make_ui_art.py`), сторонних изображений нет.

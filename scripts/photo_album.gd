@@ -1,7 +1,7 @@
 extends Control
 ## Альбом снимков (L) и финальное слайд-шоу «Ваш остров» после прохождения.
-const PAPER := Color("e9e3ce")
-const GOLD := Color("deb777")
+const PAPER := Color("dccfb0")
+const GOLD := Color("c39a55")
 const INK := Color(0.02, 0.05, 0.07, 0.96)
 const SLIDE := 3.6
 

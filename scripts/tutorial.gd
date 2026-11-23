@@ -44,7 +44,7 @@ func _ensure_panel() -> void:
 	var hud = game.hud
 	panel = hud.panel(hud.game_ui, Rect2(1017, 300, 391, 200), Color(0.05, 0.12, 0.13, 0.92))
 	panel.name = "TutorialPanel"
-	panel.add_theme_stylebox_override("panel", hud.style(Color(0.05, 0.12, 0.13, 0.92), Color("deb777"), 9))
+	panel.add_theme_stylebox_override("panel", hud.style(Color(0.05, 0.12, 0.13, 0.92), Color("c39a55"), 9))
 	title_label = hud.text(panel, "", Rect2(18, 12, 355, 20), 12, hud.GOLD)
 	body_label = hud.text(panel, "", Rect2(18, 38, 355, 120), 16, hud.PAPER)
 	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

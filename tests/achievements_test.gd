@@ -116,7 +116,12 @@ func run() -> void:
 	var texts := ""
 	for n in a.panel.find_children("*", "Label", true, false):
 		texts += (n as Label).text + "\n"
-	check(texts.contains("Ночей пережито") and texts.contains("★ Первая ночь") and texts.contains("☆ Лоцман"), "На экране статистика, открытые и закрытые достижения")
+	var stamps := 0
+	for n in a.panel.find_children("*", "TextureRect", true, false):
+		if (n as TextureRect).texture == game.hud.UI.STAMP_RECORDED:
+			stamps += 1
+	# v1.3: открытые отмечены штампом «ЗАПИСАНО», закрытые — прочерком (без звёздочек-эмодзи)
+	check(texts.contains("Ночей пережито") and texts.contains("Первая ночь") and texts.contains("Лоцман") and stamps == a.unlocked.size() and not texts.contains("★"), "На экране статистика, открытые (штамп ×%d) и закрытые достижения" % stamps)
 	var esc := InputEventKey.new()
 	esc.pressed = true
 	esc.physical_keycode = KEY_ESCAPE

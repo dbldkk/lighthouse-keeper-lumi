@@ -164,11 +164,11 @@ func _build() -> void:
 	shade.color = Color(.014,.032,.036,.87)
 	modal.add_child(shade)
 	game.hud.panel(modal, Rect2(326,210,788,455), Color("13292c"))
-	game.hud.text(modal, "ОСТРОВ СЕВЕРНЫЙ  /  ДЕМОНСТРАЦИЯ", Rect2(368,246,704,26), 14, Color("deb777"))
+	game.hud.text(modal, "ОСТРОВ СЕВЕРНЫЙ  /  ДЕМОНСТРАЦИЯ", Rect2(368,246,704,26), 14, Color("c39a55"))
 	heading = game.hud.text(modal, "", Rect2(368,282,704,43), 28)
 	dialogue = game.hud.text(modal, "", Rect2(368,346,704,132), 22)
 	dialogue.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	response = game.hud.text(modal, "", Rect2(368,478,704,31), 17, Color("deb777"))
+	response = game.hud.text(modal, "", Rect2(368,478,704,31), 17, Color("c39a55"))
 	primary = game.hud.make_button(modal, "", Vector2(368,526), accept, true)
 	primary_style = primary.get_theme_stylebox("normal")
 	alternate = game.hud.make_button(modal, "2 · Северный", Vector2(701,526), func(): choose(false))

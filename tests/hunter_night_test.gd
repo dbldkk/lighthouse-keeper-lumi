@@ -66,6 +66,7 @@ func run() -> void:
 	game.tutorial.stop()
 	await frames(2)
 	h = game.hunter
+	h.rng.seed = 4242   # обход случайный; фиксируем зерно, чтобы тест был воспроизводимым
 	game.night_raids.set_process(false)
 	# 1. точка появления/бегства никогда не в свете маяка (причина бага v1.2)
 	night(true)
@@ -102,6 +103,7 @@ func run() -> void:
 	h.body.global_position = Vector3(-6, 1, -4)
 	h.target = h.body.global_position
 	h.catches = 0
+	h.mercy_time = 0
 	r = simulate(12.0)
 	check(not h._in_light(h.body.global_position) and r.states.has("flee"), "Из круга света уходит, а не стоит в нём")
 	# если за это время он успел снова найти и схватить смотрителя — после броска законно отступает
@@ -146,6 +148,17 @@ func run() -> void:
 	game.exit_building()
 	await frames(1)
 	h.space = ""
+	# 6б. баланс v1.3: два броска подряд не наносят урон дважды — после броска 25 с передышки
+	h.mercy_time = 0
+	game.health = 100
+	h._catch()
+	var after_first: float = game.health
+	h._catch()
+	check(after_first < 100 and game.health == after_first and h.state == "flee", "Второй бросок сразу после первого — только замах и отступление (%.0f → %.0f)" % [after_first, game.health])
+	h.mercy_time = 0
+	h._catch()
+	check(game.health < after_first, "После передышки снова опасен")
+	game.health = 100
 	# 7. рассвет — уходит
 	game.campaign.state.night = false
 	h._process(DT)

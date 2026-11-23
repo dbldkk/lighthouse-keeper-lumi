@@ -14,7 +14,9 @@ const PATROL_SPEED := 1.9
 const INVESTIGATE_SPEED := 3.1
 const CHASE_SPEED := 4.9           ## медленнее бега смотрителя (6.3), быстрее шага (4.2)
 const CATCH_DIST := 1.25
-const DAMAGE := 45.0
+const DAMAGE := 35.0              ## v1.3 баланс: было 45 (три броска подряд убивали за полминуты)
+const MERCY_SECONDS := 25.0       ## после броска столько секунд он не хватает снова — только пугает и отходит
+const MERCY_NIGHTMARE := 14.0
 const SANITY_HIT := 18.0
 const SIGHT_LANTERN := 15.0        ## фонарь видно издалека
 const SIGHT_DARK := 6.0
@@ -38,6 +40,7 @@ var target := Vector3.ZERO
 var last_known := Vector3.ZERO
 var state_time := 0.0
 var step_clock := 0.0
+var mercy_time := 0.0
 var growl_clock := 6.0
 var stuck_clock := 0.0
 var stuck_from := Vector3.ZERO
@@ -251,6 +254,7 @@ func reset() -> void:
 	leave_hiding()
 	_despawn()
 	catches = 0
+	mercy_time = 0
 	nights_hunted = 0
 	announced = false
 
@@ -444,6 +448,7 @@ func _process(delta: float) -> void:
 		_spawn()
 	state_time += delta
 	repel_time = maxf(0, repel_time - delta)
+	mercy_time = maxf(0, mercy_time - delta)
 	gasp_cooldown = maxf(0, gasp_cooldown - delta)
 	_tick_breath(delta)
 	if space.is_empty():
@@ -653,7 +658,20 @@ func _passable(here: Vector3, dir: Vector3) -> bool:
 	return true
 
 func _catch() -> void:
+	if mercy_time > 0:
+		# только что хватал: замахивается, ревёт — и отступает. Страшно, но не смертельно подряд.
+		game.sound.sfx("groan", 0, .6, body.global_position + Vector3.UP * 2)
+		game.camera_shake = maxf(game.camera_shake, .35)
+		game.sanity = maxf(0, game.sanity - 6)
+		if is_instance_valid(game.dread):
+			game.dread.glitch_pulse(.6)
+		game.notify("Оно замахнулось — и отпрянуло. Бегите к свету или прячьтесь, второй раз не повезёт!", 5, 2)
+		repel_time = 6.0
+		_set_state("flee")
+		target = _far_point(20.0)
+		return
 	catches += 1
+	mercy_time = MERCY_NIGHTMARE if game.difficulty == "nightmare" else MERCY_SECONDS
 	if is_instance_valid(game.achievements):
 		game.achievements.note("caught")
 	if visual != null:
@@ -665,7 +683,7 @@ func _catch() -> void:
 	if is_instance_valid(game.dread):
 		game.dread.glitch_pulse(1.0)
 	game.sanity = maxf(0, game.sanity - SANITY_HIT)
-	game.take_damage(DAMAGE, "hunter")
+	game.take_damage(DAMAGE * (45.0 / 35.0 if game.difficulty == "nightmare" else 1.0), "hunter")
 	if game.health > 0:
 		game.notify("Оно схватило вас и отшвырнуло в темноту. Ещё раз — и вы не встанете. Прячьтесь или бегите к свету.", 7, 2)
 	# уходит, чтобы игрок успел опомниться

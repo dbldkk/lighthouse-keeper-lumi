@@ -6,8 +6,8 @@ const Geo = preload("res://scripts/geometry.gd")
 const STATION = preload("res://scripts/interactable.gd")
 const CAMERA_SPOT := Vector3(4.5, 1, -32.5)
 const FILM := 36
-const PAPER := Color("e9e3ce")
-const GOLD := Color("deb777")
+const PAPER := Color("dccfb0")
+const GOLD := Color("c39a55")
 const TEAL := Color("8fd7c0")
 ## Запланированные фото-моменты. Каждый появляется днём на своём дне и ждёт снимка около минуты.
 const MOMENTS := [

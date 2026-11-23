@@ -1,10 +1,11 @@
 extends Control
 ## Слой «режиссуры» поверх HUD: куда идти, что случилось и что только что получилось.
 ## Маркер текущей цели в мире, стрелка у края экрана, баннеры событий и заставки дня/ночи.
-const TEAL := Color("8fd7c0")
-const GOLD := Color("deb777")
-const PAPER := Color("e9e3ce")
-const INK := Color(0.03, 0.09, 0.11, 0.88)
+const UI = preload("res://scripts/ui_style.gd")
+const TEAL := Color("9fb5a4")
+const GOLD := Color("c39a55")
+const PAPER := Color("dccfb0")
+const INK := Color(0.08, 0.065, 0.05, 0.9)
 
 var game: Node
 var marker: Node3D
@@ -28,7 +29,7 @@ var font: Font
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	font = ThemeDB.fallback_font
+	font = UI.SERIF
 
 func alert(title: String, text: String, seconds: float = 4.0, color: Color = GOLD) -> void:
 	alert_title = title
@@ -189,6 +190,29 @@ func _draw() -> void:
 	_draw_lantern_hint()
 	_draw_beam_tutorial()
 
+## Просмолённый лист с неровным краем вместо ровного прямоугольника.
+var _strip_box: StyleBoxTexture
+func _sheet(box: Rect2, alpha := 1.0) -> void:
+	if _strip_box == null:
+		_strip_box = UI.strip()
+	_strip_box.modulate_color = Color(1, 1, 1, alpha)
+	draw_style_box(_strip_box, box.grow(6))
+
+## Чернильный росчерк от руки: чуть дрожащая линия с утолщением.
+func _underline(a: Vector2, b: Vector2, color: Color) -> void:
+	var pts := PackedVector2Array()
+	var n := 14
+	for i in n + 1:
+		var t := float(i) / n
+		pts.append(a.lerp(b, t) + Vector2(0, sin(t * 9.0 + a.x * .1) * .9 + (t - .5) * 1.4))
+	draw_polyline(pts, Color(color, color.a * .85), 2.0, true)
+
+## Пометка на полях вместо цветной полосы.
+func _margin_mark(box: Rect2, color: Color) -> void:
+	var x := box.position.x + 7
+	draw_line(Vector2(x, box.position.y + 10), Vector2(x + 1.5, box.end.y - 10), Color(color, .8), 2.0, true)
+	draw_line(Vector2(x + 4, box.position.y + 14), Vector2(x + 4.5, box.position.y + 28), Color(color, .6), 1.5, true)
+
 func _text(content: String, at: Vector2, size_px: int, color: Color, width: float = -1, align := HORIZONTAL_ALIGNMENT_LEFT) -> void:
 	draw_string(font, at + Vector2(2, 2), content, align, width, size_px, Color(0, 0, 0, color.a * .6))
 	draw_string(font, at, content, align, width, size_px, color)
@@ -291,8 +315,8 @@ func _draw_objective() -> void:
 	var lines := _wrap(label, width - 92, 17)
 	var box := Rect2(view.x * .5 - width * .5, 20, width, 26 + lines.size() * 22)
 	var accent: Color = Color("ff9a6a") if data.get("night", false) else TEAL
-	draw_rect(box, INK)
-	draw_rect(Rect2(box.position, Vector2(box.size.x, 3)), accent)
+	_sheet(box)
+	_underline(box.position + Vector2(14, box.size.y - 7), box.position + Vector2(box.size.x - 14, box.size.y - 7), accent)
 	_text("ЦЕЛЬ", box.position + Vector2(16, 29), 12, GOLD)
 	for i in lines.size():
 		_text(lines[i], box.position + Vector2(70, 30 + i * 22), 17, PAPER)
@@ -306,18 +330,18 @@ func _draw_dawn_bar() -> void:
 	var left := maxf(0, total - clock)
 	var view := get_viewport_rect().size
 	var box := Rect2(view.x * .5 - 260, _dawn_bar_top(), 520, 72)
-	draw_rect(box, INK)
+	_sheet(box)
 	var ratio := clampf(clock / maxf(1, total), 0, 1)
 	draw_rect(Rect2(box.position + Vector2(16, 36), Vector2(box.size.x - 32, 7)), Color(1, 1, 1, .1))
-	draw_rect(Rect2(box.position + Vector2(16, 36), Vector2((box.size.x - 32) * ratio, 7)), Color("ffcf7a"))
+	draw_rect(Rect2(box.position + Vector2(16, 36), Vector2((box.size.x - 32) * ratio, 7)), Color("d9a85a"))
 	var title := "ДО РАССВЕТА  %d:%02d" % [int(left) / 60, int(left) % 60] if left > 0 else "РАССВЕТ БЛИЗКО"
-	_text(title, box.position + Vector2(16, 27), 18, Color("ffcf7a"))
+	_text(title, box.position + Vector2(16, 27), 18, Color("d9a85a"))
 	var raids: Node = game.night_raids
 	var info := "Волна %d" % raids.wave
 	var next: float = raids.next_wave - raids.clock
 	if left > 4 and next > 0:
 		info += " · следующая через %d с" % ceili(next)
-	info += "   Маяк %s · Хижина %s" % ["✓" if game.lighthouse_on else "✗", ("%d%%" % roundi(raids.barricade_hp / raids.max_hp() * 100.0)) if game.barricade_built else "✗"]
+	info += "   Маяк %s · Хижина %s" % ["горит" if game.lighthouse_on else "ПОГАС", ("%d%%" % roundi(raids.barricade_hp / raids.max_hp() * 100.0)) if game.barricade_built else "открыта"]
 	draw_string(font, box.position + Vector2(16, 62), info, HORIZONTAL_ALIGNMENT_LEFT, box.size.x - 32, 13, PAPER)
 
 func _dawn_bar_top() -> float:
@@ -349,8 +373,8 @@ func _draw_radio() -> void:
 	var height := 46.0 + lines.size() * 25.0 + (24.0 if not hint.is_empty() else 0.0)
 	var box := Rect2(view.x * .5 - width * .5, 718 - height, width, height)
 	var color: Color = Color("b89cff") if data.style == "ghost" else (Color("c9b78f") if data.style == "record" else TEAL)
-	draw_rect(box, Color(0.02, 0.06, 0.08, .9))
-	draw_rect(Rect2(box.position, Vector2(4, box.size.y)), color)
+	_sheet(box)
+	_margin_mark(box, color)
 	var pulse := .55 + .45 * absf(sin(Time.get_ticks_msec() * .012))
 	draw_circle(box.position + Vector2(22, 20), 5, Color(color.r, color.g, color.b, pulse))
 	_text("РАДИО · " + String(data.speaker), box.position + Vector2(36, 26), 13, color)
@@ -383,11 +407,11 @@ func _draw_event_banner() -> void:
 	var view := get_viewport_rect().size
 	var box := Rect2(view.x * .5 - 280, 96, 560, 74)
 	var color: Color = data.color
-	draw_rect(box, INK)
-	draw_rect(Rect2(box.position, Vector2(4, box.size.y)), color)
+	_sheet(box)
+	_margin_mark(box, color)
 	var urgent: bool = data.time < 10
 	var blink := (.55 + .45 * absf(sin(Time.get_ticks_msec() * .008))) if urgent else 1.0
-	_text((String(data.title) if String(data.title).begins_with("◉") else "⚠ " + String(data.title)), box.position + Vector2(18, 26), 19, Color(color.r, color.g, color.b, blink))
+	_text(String(data.title).trim_prefix("◉ "), box.position + Vector2(18, 26), 19, Color(color.r, color.g, color.b, blink))
 	var timer := "%d:%02d" % [int(data.time) / 60, int(data.time) % 60]
 	_text(timer, box.position + Vector2(box.size.x - 80, 26), 19, Color("ff8a6a") if urgent else PAPER)
 	_text(("%s · %d м" % [data.hint, roundi(data.distance)]) if float(data.distance) > 0 else String(data.hint), box.position + Vector2(18, 50), 13, PAPER)
@@ -406,8 +430,8 @@ func _draw_alert() -> void:
 	var text_width := font.get_string_size(alert_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 	var width := maxf(title_width, text_width) + 60
 	var box := Rect2(view.x * .5 - width * .5, y, width, 72)
-	draw_rect(box, Color(INK.r, INK.g, INK.b, INK.a * fade))
-	draw_rect(Rect2(box.position + Vector2(0, box.size.y - 3), Vector2(box.size.x, 3)), Color(alert_color.r, alert_color.g, alert_color.b, fade))
+	_sheet(box, fade)
+	_underline(box.position + Vector2(18, box.size.y - 8), box.position + Vector2(box.size.x - 18, box.size.y - 8), Color(alert_color.r, alert_color.g, alert_color.b, fade))
 	_text(alert_title, Vector2(view.x * .5 - title_width * .5, y + 32), 26, Color(alert_color.r, alert_color.g, alert_color.b, fade))
 	_text(alert_text, Vector2(view.x * .5 - text_width * .5, y + 56), 15, Color(PAPER.r, PAPER.g, PAPER.b, fade))
 
@@ -417,7 +441,7 @@ func _draw_card() -> void:
 	var view := get_viewport_rect().size
 	var fade := minf(1.0, card_time / .8) * minf(1.0, (4.2 - card_time) / .5)
 	var band := Rect2(0, view.y * .5 - 82, view.x, 150)
-	draw_rect(band, Color(0.02, 0.06, 0.08, .72 * fade))
+	_sheet(Rect2(view.x * .5 - 380, band.position.y + 8, 760, band.size.y - 8), .92 * fade)
 	draw_line(Vector2(view.x * .5 - 220, band.position.y + 30), Vector2(view.x * .5 + 220, band.position.y + 30), Color(GOLD.r, GOLD.g, GOLD.b, .5 * fade), 1)
 	var title_width := font.get_string_size(card_title, HORIZONTAL_ALIGNMENT_LEFT, -1, 44).x
 	_text(card_title, Vector2(view.x * .5 - title_width * .5, band.position.y + 82), 44, Color(PAPER.r, PAPER.g, PAPER.b, fade))
@@ -431,7 +455,7 @@ func _draw_lantern_hint() -> void:
 	var screen: Vector2 = game.camera.unproject_position(game.player.global_position + Vector3(0, 2.6, 0))
 	var ratio: float = game.lantern_beam.charge / 100.0
 	draw_rect(Rect2(screen + Vector2(-34, 0), Vector2(68, 6)), Color(0, 0, 0, .6))
-	draw_rect(Rect2(screen + Vector2(-33, 1), Vector2(66 * ratio, 4)), Color("ffcf7a") if ratio > .3 else Color("ff7a5a"))
+	draw_rect(Rect2(screen + Vector2(-33, 1), Vector2(66 * ratio, 4)), Color("d9a85a") if ratio > .3 else Color("ff7a5a"))
 
 ## Пока игрок ни разу не рассеял тень, над ближайшей агрессивной тенью висит подсказка «ПКМ».
 func _draw_beam_tutorial() -> void:
@@ -454,6 +478,6 @@ func _draw_beam_tutorial() -> void:
 	var label := "Зажмите ПКМ (или C) — выжгите тень лучом"
 	var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
 	var pulse := .7 + .3 * sin(Time.get_ticks_msec() * .008)
-	draw_rect(Rect2(screen + Vector2(-width * .5 - 12, -30), Vector2(width + 24, 30)), Color(INK.r, INK.g, INK.b, .92))
-	draw_rect(Rect2(screen + Vector2(-width * .5 - 12, -3), Vector2(width + 24, 3)), Color(1, .81, .48, pulse))
+	_sheet(Rect2(screen + Vector2(-width * .5 - 16, -34), Vector2(width + 32, 38)))
+	_underline(screen + Vector2(-width * .5, -4), screen + Vector2(width * .5, -4), Color(1, .81, .48, pulse))
 	_text(label, screen + Vector2(-width * .5, -9), 16, Color(1, .87, .6, pulse))

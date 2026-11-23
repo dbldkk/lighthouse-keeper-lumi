@@ -14,8 +14,8 @@ const GAMES := {
 	"quarry": preload("res://scripts/minigames/quarry.gd")
 }
 const INK := Color(0.02, 0.06, 0.08, 0.94)
-const PAPER := Color("e9e3ce")
-const GOLD := Color("deb777")
+const PAPER := Color("dccfb0")
+const GOLD := Color("c39a55")
 const TEAL := Color("8fd7c0")
 const RED := Color("ff7a5a")
 const REPAIRS := {
