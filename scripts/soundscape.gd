@@ -12,6 +12,24 @@ var horror_cache := {}
 var burn: AudioStreamPlayer
 var cue_player: AudioStreamPlayer
 var cue_cache := {}
+const BAL = preload("res://scripts/balance.gd")
+const SURFACES := ["grass", "wood", "stone", "sand"]
+const STEP_VARIANTS := 5
+## Громкость поверхностей относительно друг друга (дБ): дерево звонче, песок глуше.
+const SURFACE_GAIN := {"grass": -1.0, "wood": 1.5, "stone": 0.0, "sand": -2.5}
+const HORROR_FILES := {"heartbeat":"heartbeat","static":"static_burst","stinger":"stinger","slam":"door_slam","whisper_long":"whisper","flicker":"lantern_flicker","breath":"breath","hit":"hit","tell":"tell","splash":"splash"}
+var step_samples := {}
+var step_pool: Array[AudioStreamPlayer] = []
+var step_index := 0
+var last_variant := {}
+var horror_samples := {}
+var deep_drone: AudioStreamPlayer
+var heart: AudioStreamPlayer
+var heart_clock := 0.0
+var heart_rate := 0.0
+var heart_volume := -60.0
+var muffle: AudioEffectLowPassFilter
+var muffle_bus := -1
 const TITLE_THEME = preload("res://assets/audio/music/menu_tide.wav")
 const END_THEME = preload("res://assets/audio/music/morning_signal.wav")
 
@@ -27,6 +45,8 @@ func _ready() -> void:
 	steps.bus = "Environment"
 	steps.volume_db = -17
 	add_child(steps)
+	_load_steps()
+	_load_horror()
 	effect = AudioStreamPlayer.new()
 	effect.stream = noise_stream(0.3, 2)
 	effect.bus = "Environment"
@@ -147,10 +167,142 @@ func noise_stream(duration: float, kind: int) -> AudioStreamWAV:
 		stream.loop_end = count
 	return stream
 
-func footstep() -> void:
-	if not steps.playing:
-		steps.pitch_scale = randf_range(0.88, 1.1)
-		steps.play()
+# ---------------------------------------------------------------- шаги
+func _load_steps() -> void:
+	for surface in SURFACES:
+		var list: Array = []
+		for i in STEP_VARIANTS:
+			var path := "res://assets/audio/steps/%s_%d.wav" % [surface, i + 1]
+			if ResourceLoader.exists(path):
+				list.append(load(path))
+		step_samples[surface] = list
+	# Пул из четырёх плееров: шаг не обрывает предыдущий хвост (нет щелчков), но и не копится.
+	for i in 4:
+		var player := AudioStreamPlayer.new()
+		player.bus = "Environment"
+		add_child(player)
+		step_pool.append(player)
+
+## Шаг: случайный вариант (не повторяет предыдущий), разброс высоты и громкости, поверхность.
+func footstep(surface: String = "grass", running := false) -> void:
+	var list: Array = step_samples.get(surface, step_samples.get("grass", []))
+	if list.is_empty():
+		if not steps.playing:
+			steps.pitch_scale = randf_range(0.88, 1.1)
+			steps.play()
+		return
+	var variant := randi() % list.size()
+	if list.size() > 1 and variant == int(last_variant.get(surface, -1)):
+		variant = (variant + 1 + randi() % (list.size() - 1)) % list.size()
+	last_variant[surface] = variant
+	var player: AudioStreamPlayer = step_pool[step_index]
+	step_index = (step_index + 1) % step_pool.size()
+	player.stream = list[variant]
+	player.pitch_scale = 1.0 + randf_range(-BAL.STEP_PITCH_JITTER, BAL.STEP_PITCH_JITTER) + (0.04 if running else 0.0)
+	player.volume_db = BAL.STEP_VOLUME_DB + float(SURFACE_GAIN.get(surface, 0.0)) + randf_range(-BAL.STEP_VOLUME_JITTER_DB, BAL.STEP_VOLUME_JITTER_DB) * .5 + (BAL.STEP_RUN_BOOST_DB if running else 0.0)
+	player.play()
+
+## Шаги «за спиной» в 3D: тот же набор сэмплов, что и у смотрителя.
+func phantom_step(at: Vector3, surface: String = "grass") -> void:
+	var list: Array = step_samples.get(surface, [])
+	if list.is_empty():
+		horror_cue("steps", at)
+		return
+	var cue3d := AudioStreamPlayer3D.new()
+	cue3d.bus = "Environment"
+	cue3d.stream = list[randi() % list.size()]
+	cue3d.unit_size = 4
+	cue3d.max_distance = 30
+	cue3d.volume_db = BAL.STEP_VOLUME_DB + 2.0
+	cue3d.pitch_scale = randf_range(.86, .94)
+	add_child(cue3d)
+	cue3d.global_position = at
+	cue3d.finished.connect(cue3d.queue_free)
+	cue3d.play()
+
+# ---------------------------------------------------------------- ужас
+func _load_horror() -> void:
+	for key in HORROR_FILES:
+		var path := "res://assets/audio/horror/%s.wav" % HORROR_FILES[key]
+		if ResourceLoader.exists(path):
+			horror_samples[key] = load(path)
+	if ResourceLoader.exists("res://assets/audio/horror/drone_low.wav"):
+		var loop: AudioStreamWAV = (load("res://assets/audio/horror/drone_low.wav") as AudioStreamWAV).duplicate()
+		loop.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		loop.loop_begin = 0
+		loop.loop_end = roundi(loop.get_length() * loop.mix_rate)
+		deep_drone = AudioStreamPlayer.new()
+		deep_drone.stream = loop
+		deep_drone.bus = "Environment"
+		deep_drone.volume_db = -70
+		add_child(deep_drone)
+		deep_drone.play()
+	heart = AudioStreamPlayer.new()
+	heart.bus = "Environment"
+	heart.stream = horror_samples.get("heartbeat")
+	add_child(heart)
+	_setup_muffle()
+
+func _setup_muffle() -> void:
+	muffle_bus = AudioServer.get_bus_index("Environment")
+	if muffle_bus < 0:
+		AudioServer.add_bus()
+		muffle_bus = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(muffle_bus, "Environment")
+	for i in AudioServer.get_bus_effect_count(muffle_bus):
+		if AudioServer.get_bus_effect(muffle_bus, i) is AudioEffectLowPassFilter:
+			muffle = AudioServer.get_bus_effect(muffle_bus, i)
+			return
+	muffle = AudioEffectLowPassFilter.new()
+	muffle.cutoff_hz = 20000
+	AudioServer.add_bus_effect(muffle_bus, muffle)
+
+## Одиночный звук ужаса. Для 3D передайте точку, иначе звучит «в голове».
+func scare(kind: String, volume_db := -6.0, pitch := 1.0, at: Variant = null) -> void:
+	var stream: AudioStream = horror_samples.get(kind)
+	if stream == null:
+		cue("alarm")
+		return
+	if at is Vector3:
+		var p3 := AudioStreamPlayer3D.new()
+		p3.bus = "Environment"
+		p3.stream = stream
+		p3.unit_size = 6
+		p3.max_distance = 45
+		p3.volume_db = volume_db
+		p3.pitch_scale = pitch
+		add_child(p3)
+		p3.global_position = at
+		p3.finished.connect(p3.queue_free)
+		p3.play()
+		return
+	var p := AudioStreamPlayer.new()
+	p.bus = "Environment"
+	p.stream = stream
+	p.volume_db = volume_db
+	p.pitch_scale = pitch
+	add_child(p)
+	p.finished.connect(p.queue_free)
+	p.play()
+
+## Напряжение: 0 — спокойно, 1 — паника. Сердцебиение, низкий гул и «глухой» слух.
+func set_tension(tension: float, heart_bpm: float, delta: float) -> void:
+	tension = clampf(tension, 0, 1)
+	if is_instance_valid(deep_drone):
+		deep_drone.volume_db = move_toward(deep_drone.volume_db, lerpf(-60, -16, tension) if tension > .05 else -70.0, 30 * delta)
+	if muffle != null:
+		muffle.cutoff_hz = lerpf(20000, 1400, smoothstep(.45, 1.0, tension))
+	heart_rate = heart_bpm
+	heart_volume = lerpf(-26, -4, clampf((heart_bpm - 60) / 80.0, 0, 1))
+	if heart_bpm <= 0 or not is_instance_valid(heart) or heart.stream == null:
+		heart_clock = 0
+		return
+	heart_clock += delta
+	if heart_clock >= 60.0 / heart_bpm:
+		heart_clock = 0
+		heart.volume_db = heart_volume
+		heart.pitch_scale = randf_range(.97, 1.03)
+		heart.play()
 
 func interact(kind: String = "") -> void:
 	effect.pitch_scale = {"wood": 0.7, "beacon": 0.65, "cook": 1.15, "fish": 1.3}.get(kind, 1.0)
@@ -163,6 +315,9 @@ func set_burn(active: bool) -> void:
 
 ## alarm — тревога события, chime — цель выполнена, dispel — тень рассеяна.
 func cue(kind: String) -> void:
+	if kind in ["hit", "tell", "splash", "flicker"]:
+		scare(kind, {"hit":-4.0, "tell":-8.0, "splash":-6.0, "flicker":-8.0}[kind], randf_range(.94, 1.06))
+		return
 	var type: int = {"alarm":11,"chime":12,"dispel":13}.get(kind,12)
 	if not cue_cache.has(type):cue_cache[type]=noise_stream({11:1.0,12:.62,13:.55}[type],type)
 	if kind == "dispel":
@@ -196,7 +351,9 @@ func horror_cue(kind: String, at: Vector3) -> void:
 	cue.play()
 
 func _exit_tree() -> void:
-	for audio_player in [sea, steps, effect, rainfall, drone, radio, engine, music, burn, cue_player]:
+	if muffle != null:
+		muffle.cutoff_hz = 20000
+	for audio_player in [sea, steps, effect, rainfall, drone, radio, engine, music, burn, cue_player, deep_drone, heart]:
 		if is_instance_valid(audio_player):
 			audio_player.stop()
 			audio_player.stream = null

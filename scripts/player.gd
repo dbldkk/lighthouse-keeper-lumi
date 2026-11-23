@@ -176,15 +176,41 @@ func _physics_process(delta: float) -> void:
 				motion.rate = clampf(ground_speed / WALK_PACE, .7, 1.9)
 				motion.play("walk")
 	if is_on_floor() and moving and landing_time <= 0:
-		step_clock += delta
-		if step_clock > (0.26 if running else 0.4):
-			step_clock = 0
-			stepped.emit()
+		_tick_steps(delta, running)
+	else:
+		last_step_phase = -1.0
 	# Наклон корпуса вперёд пропорционально скорости: бег перестаёт выглядеть «деревянным».
 	var lean := clampf(Vector2(velocity.x, velocity.z).length() / sprint_speed, 0, 1) * (.16 if running else .09)
 	$Visual.rotation.x = lerpf($Visual.rotation.x, lean if is_on_floor() else 0.0, minf(1, delta * 8))
 	motion.tick(delta)
 	_sync_lantern()
+
+## Шаг звучит в момент касания стопы: по фазе клипа ходьбы/трусцы (две опоры за цикл).
+## Если клипа нет — по длине шага и скорости.
+const STEP_CONTACTS := [0.08, 0.58]
+const STRIDE_LENGTH := 0.72
+var last_step_phase := -1.0
+
+func _tick_steps(delta: float, running: bool) -> void:
+	var animator: AnimationPlayer = motion.animator
+	if animator != null and motion.current in ["walk", "jog", "run"] and animator.current_animation == motion.current:
+		var length: float = maxf(.05, animator.current_animation_length)
+		var phase: float = fposmod(animator.current_animation_position, length) / length
+		if last_step_phase >= 0:
+			for contact in STEP_CONTACTS:
+				var crossed: bool = (last_step_phase < contact and phase >= contact) or (phase < last_step_phase and (contact > last_step_phase or contact <= phase))
+				if crossed and step_clock > .12:
+					step_clock = 0
+					stepped.emit()
+		last_step_phase = phase
+		step_clock += delta
+		return
+	last_step_phase = -1.0
+	step_clock += delta
+	var speed: float = maxf(.5, Vector2(velocity.x, velocity.z).length())
+	if step_clock >= STRIDE_LENGTH * (1.25 if running else 1.0) / speed:
+		step_clock = 0
+		stepped.emit()
 
 func toggle_lantern() -> void:
 	lantern_on = not lantern_on
