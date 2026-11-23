@@ -63,6 +63,11 @@ var task_panel: Panel
 var fade_rect: ColorRect
 var fading := false
 var beam_bar: ProgressBar
+var oil_bar: ProgressBar
+var oil_label: Label
+var health_value: Label
+var hunger_value: Label
+var sanity_value: Label
 var beam_label: Label
 const OVERLAY = preload("res://scripts/hud_overlay.gd")
 
@@ -159,10 +164,10 @@ func build_game_ui() -> void:
 	root.add_child(game_ui)
 	text(game_ui, "СМОТРИТЕЛЬ МАЯКА", Rect2(32, 25, 440, 30), 22, PAPER)
 	text(game_ui, "ПУТЬ С ОСТРОВА   /   ОСТРОВ СЕВЕРНЫЙ", Rect2(33, 59, 420, 22), 12, GOLD)
-	task_panel = panel(game_ui, Rect2(32, 119, 300, 320))
-	text(game_ui, "ЖУРНАЛ СМОТРИТЕЛЯ", Rect2(51, 137, 270, 25), 13, GOLD)
-	task_label = text(game_ui, "", Rect2(51, 177, 263, 220), 14)
-	task_label.clip_text = true
+	task_panel = panel(game_ui, Rect2(32, 119, 340, 320))
+	text(game_ui, "ЖУРНАЛ СМОТРИТЕЛЯ", Rect2(51, 137, 300, 25), 13, GOLD)
+	task_label = text(game_ui, "", Rect2(51, 172, 303, 220), 15)
+	task_label.clip_text = false
 	task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel(game_ui, Rect2(1150, 25, 258, 83))
 	clock_label = text(game_ui, "", Rect2(1168, 38, 224, 33), 23)
@@ -175,18 +180,25 @@ func build_game_ui() -> void:
 	map.size = Vector2(172, 155)
 	map.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	game_ui.add_child(map)
-	panel(game_ui, Rect2(32, 775, 438, 96))
-	text(game_ui, "ЗДОРОВЬЕ", Rect2(51, 787, 130, 20), 11, MUTED)
-	text(game_ui, "СЫТОСТЬ", Rect2(192, 787, 125, 20), 11, MUTED)
-	text(game_ui, "РАССУДОК", Rect2(332, 787, 125, 20), 11, MUTED)
-	health_bar = progress(game_ui, Rect2(51, 815, 118, 8), Color("c48e78"))
-	hunger_bar = progress(game_ui, Rect2(192, 815, 118, 8), Color("d7b477"))
-	sanity_bar = progress(game_ui, Rect2(332, 815, 118, 8), Color("7da8a3"))
-	stamina_bar = progress(game_ui, Rect2(51, 847, 190, 4), Color("9cbca6"))
-	text(game_ui, "ВЫНОСЛИВОСТЬ", Rect2(51, 828, 160, 15), 9, MUTED)
-	beam_bar = progress(game_ui, Rect2(260, 847, 190, 4), Color("ffcf7a"))
-	beam_label = text(game_ui, "ЛУЧ ФОНАРЯ · ПКМ", Rect2(260, 828, 120, 15), 9, MUTED)
-	warmth_label = text(game_ui,"",Rect2(392,828,70,15),10,MUTED)
+	panel(game_ui, Rect2(32, 744, 438, 127))
+	text(game_ui, "ЗДОРОВЬЕ", Rect2(51, 755, 100, 20), 12, MUTED)
+	text(game_ui, "СЫТОСТЬ", Rect2(192, 755, 100, 20), 12, MUTED)
+	text(game_ui, "РАССУДОК", Rect2(332, 755, 100, 20), 12, MUTED)
+	health_value = text(game_ui, "", Rect2(121, 755, 50, 20), 12, PAPER)
+	hunger_value = text(game_ui, "", Rect2(262, 755, 50, 20), 12, PAPER)
+	sanity_value = text(game_ui, "", Rect2(402, 755, 50, 20), 12, PAPER)
+	for value_label in [health_value, hunger_value, sanity_value]:
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	health_bar = progress(game_ui, Rect2(51, 778, 120, 14), Color("d0806a"))
+	hunger_bar = progress(game_ui, Rect2(192, 778, 120, 14), Color("d7b477"))
+	sanity_bar = progress(game_ui, Rect2(332, 778, 120, 14), Color("7da8a3"))
+	text(game_ui, "ВЫНОСЛИВОСТЬ", Rect2(51, 799, 160, 15), 10, MUTED)
+	stamina_bar = progress(game_ui, Rect2(51, 815, 190, 7), Color("9cbca6"))
+	beam_label = text(game_ui, "ЛУЧ ФОНАРЯ · ПКМ", Rect2(260, 799, 190, 15), 10, MUTED)
+	beam_bar = progress(game_ui, Rect2(260, 815, 190, 7), Color("ffcf7a"))
+	oil_label = text(game_ui, "МАСЛО ФОНАРЯ", Rect2(51, 829, 190, 15), 10, MUTED)
+	oil_bar = progress(game_ui, Rect2(51, 845, 190, 7), Color("e8a95a"))
+	warmth_label = text(game_ui,"",Rect2(260,829,190,15),10,MUTED)
 	panel(game_ui, Rect2(1017, 727, 391, 144))
 	text(game_ui, "РЮКЗАК · B", Rect2(1036, 740, 200, 19), 11, GOLD)
 	inventory_label = text(game_ui, "", Rect2(1036, 766, 354, 40), 15)
@@ -195,7 +207,7 @@ func build_game_ui() -> void:
 	prompt_bg.name = "PromptBackground"
 	prompt_label = text(game_ui, "", Rect2(508, 819, 474, 31), 14)
 	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	message_label = text(game_ui, "", Rect2(380, 619, 660, 150), 18, GOLD)
+	message_label = text(game_ui, "", Rect2(480, 590, 540, 150), 18, GOLD)
 	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	message_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -454,6 +466,15 @@ func refresh() -> void:
 	demo_hint_label.text = game.first_shift_demo.hint()
 	demo_hint_panel.visible = not demo_hint_label.text.is_empty() and not game.first_shift_demo.is_open()
 	health_bar.value = game.health
+	var blink := int(Time.get_ticks_msec() / 300) % 2 == 0
+	health_bar.modulate = Color(1.4, .5, .45) if game.health < game.BAL.LOW_HEALTH_AT and blink else Color.WHITE
+	sanity_bar.modulate = Color(.8, .6, 1.3) if game.sanity < game.BAL.SANITY_HALLUCINATE_AT and blink else Color.WHITE
+	health_value.text = str(roundi(game.health))
+	hunger_value.text = str(roundi(game.hunger))
+	sanity_value.text = str(roundi(game.sanity))
+	oil_bar.value = game.lantern_oil
+	oil_bar.modulate = Color(1.3, .55, .4) if game.lantern_oil < game.BAL.LANTERN_OIL_LOW and blink else Color.WHITE
+	oil_label.text = "МАСЛО ФОНАРЯ · %d%%" % roundi(game.lantern_oil) + ("  · ДОЛИВАЕТСЯ" if (game.lighthouse_interior.active or not game.building_interiors.active.is_empty()) and game.lantern_oil < 99.5 else "")
 	hunger_bar.value = game.hunger
 	hunger_bar.modulate = Color(1, .45, .4) if game.hunger < 35 and int(Time.get_ticks_msec() / 400) % 2 == 0 else Color.WHITE
 	sanity_bar.value = game.sanity
@@ -463,7 +484,7 @@ func refresh() -> void:
 	beam_label.text = "ЛУЧ ОСТЫВАЕТ…" if game.lantern_beam.exhausted else ("ЛУЧ ФОНАРЯ · ПКМ" if game.player.lantern_on else "ЛУЧ · включите фонарь F")
 	inventory_label.text = "Топливо %d  Дерево %d  Камень %d  Детали %d\nРыба %d  Еда %d  Вода %d/%d  Лейка %d/%d" % [game.inventory.fuel, game.inventory.wood, int(game.inventory.get("stone", 0)), int(game.expedition.state.scrap), game.inventory.fish, game.inventory.food, game.survival.water, game.survival.FLASK_CAPACITY, game.homestead.can_water, game.homestead.CAN_SIZE]
 	warmth_label.visible = game.survival.exposure_enabled()
-	warmth_label.text = "ТЕПЛО %d%%" % roundi(game.survival.warmth)
+	warmth_label.text = "ТЕПЛО %d%%" % roundi(game.survival.warmth) + ("  · ХОЛОДНО!" if game.survival.warmth < game.BAL.COLD_AT else "")
 	if not game.food_items.is_empty():
 		var meal: Dictionary = game.food_items[game.selected_food]
 		var benefit: Dictionary = game.PROVISIONS.bonuses(meal)
@@ -512,6 +533,7 @@ func refresh() -> void:
 		fishing_overlay.queue_redraw()
 	message_label.text = game.message if game.message_time > 0 else ""
 	message_label.visible = not game.fishing.is_open() and not game.radio.speaking()
+	message_label.add_theme_color_override("font_color", Color("ffb49a") if game.message_priority >= 1 else GOLD)
 	danger.color.a = maxf(0.0, danger.color.a - get_process_delta_time() * 0.8)
 	atmosphere.material.set_shader_parameter("night", game.coastal_life.night_strength)
 	atmosphere.material.set_shader_parameter("stress", clampf((55 - game.sanity) / 55, 0, 1))

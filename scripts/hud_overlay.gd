@@ -187,6 +187,7 @@ func _draw() -> void:
 	_draw_alert()
 	_draw_card()
 	_draw_lantern_hint()
+	_draw_beam_tutorial()
 
 func _text(content: String, at: Vector2, size_px: int, color: Color, width: float = -1, align := HORIZONTAL_ALIGNMENT_LEFT) -> void:
 	draw_string(font, at + Vector2(2, 2), content, align, width, size_px, Color(0, 0, 0, color.a * .6))
@@ -219,7 +220,7 @@ func _draw_arrow() -> void:
 	var label := "%s · %d м" % [target_name, roundi(distance)]
 	var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 	var at := tip - direction * 48 - Vector2(width * .5, -5)
-	at.x = clampf(at.x, 348, view.x - width - 200)
+	at.x = clampf(at.x, 388, view.x - width - 200)
 	at.y = clampf(at.y, 20, view.y - 20)
 	draw_rect(Rect2(at + Vector2(-8, -18), Vector2(width + 16, 26)), INK)
 	_text(label, at, 15, TEAL)
@@ -425,3 +426,28 @@ func _draw_lantern_hint() -> void:
 	var ratio: float = game.lantern_beam.charge / 100.0
 	draw_rect(Rect2(screen + Vector2(-34, 0), Vector2(68, 6)), Color(0, 0, 0, .6))
 	draw_rect(Rect2(screen + Vector2(-33, 1), Vector2(66 * ratio, 4)), Color("ffcf7a") if ratio > .3 else Color("ff7a5a"))
+
+## Пока игрок ни разу не рассеял тень, над ближайшей агрессивной тенью висит подсказка «ПКМ».
+func _draw_beam_tutorial() -> void:
+	if game.shadows_dispelled > 0 or game.paused or not game.is_night():
+		return
+	var nearest: Node3D = null
+	var best := 16.0
+	for enemy in game.enemies:
+		if is_instance_valid(enemy) and not enemy.passive and not enemy.is_dissolving():
+			var d: float = enemy.global_position.distance_to(game.player.global_position)
+			if d < best:
+				best = d
+				nearest = enemy
+	if nearest == null:
+		return
+	var camera: Camera3D = game.camera
+	if not camera.is_position_in_frustum(nearest.global_position):
+		return
+	var screen := camera.unproject_position(nearest.global_position + Vector3(0, 2.9, 0))
+	var label := "Зажмите ПКМ (или C) — выжгите тень лучом"
+	var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+	var pulse := .7 + .3 * sin(Time.get_ticks_msec() * .008)
+	draw_rect(Rect2(screen + Vector2(-width * .5 - 12, -30), Vector2(width + 24, 30)), Color(INK.r, INK.g, INK.b, .92))
+	draw_rect(Rect2(screen + Vector2(-width * .5 - 12, -3), Vector2(width + 24, 3)), Color(1, .81, .48, pulse))
+	_text(label, screen + Vector2(-width * .5, -9), 16, Color(1, .87, .6, pulse))
