@@ -71,6 +71,14 @@ const SCARE_CHANCE_PER_SEC := 0.035        ## базовый шанс в сек�
 const SCARE_TYPE_COOLDOWN := 120.0         ## один и тот же тип не чаще
 const SCARE_DAY_CHANCE_MULT := 0.25        ## днём пугаем реже (туман, шаги)
 
+# ---------------------------------------------------------------- мини-игры механизмов
+const MINIGAME_FAIL_SANITY := 5.0          ## рассудок за проваленную мини-игру
+const MINIGAME_DECOY_SANITY := 4.0         ## чужой голос в эфире, чёрная метка, рука из пробоины
+const MINIGAME_SHOCK_DAMAGE := 6.0         ## удар током при провале проводки
+const MINIGAME_GRAB_DAMAGE := 8.0          ## рука из пробоины схватила дважды
+const MINIGAME_NOISE_ATTRACT_CHANCE := 0.65 ## ночью провал шумит: шанс, что придёт тень
+const MINIGAME_LEAK_RATE := 0.045          ## подъём воды в секунду на одну открытую течь
+
 # ---------------------------------------------------------------- шаги
 const STEP_VOLUME_DB := -9.0
 const STEP_RUN_BOOST_DB := 3.0

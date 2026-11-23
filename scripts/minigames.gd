@@ -2,14 +2,24 @@ extends Control
 ## Короткие мини-игры вместо одиночного нажатия E: ремонт механизмов, жарка рыбы и розжиг костра.
 ## Открываются только из прямого действия игрока (клавиша E) и только когда действие выполнимо.
 ## Пробел или ЛКМ — главное действие, Esc — отмена без потери ресурсов.
-enum Mode { NONE, REPAIR, COOK, FIRE }
+enum Mode { NONE, REPAIR, COOK, FIRE, GAME }
+const BAL = preload("res://scripts/balance.gd")
+## У каждого механизма — своя мини-игра (scripts/minigames/*). Генератор остался на «стрелке».
+const GAMES := {
+	"sparks": preload("res://scripts/minigames/wires.gd"),
+	"transmitter": preload("res://scripts/minigames/tuner.gd"),
+	"pump": preload("res://scripts/minigames/bolts.gd"),
+	"ship_engine": preload("res://scripts/minigames/ignition.gd"),
+	"ship_hull": preload("res://scripts/minigames/leaks.gd"),
+	"quarry": preload("res://scripts/minigames/quarry.gd")
+}
 const INK := Color(0.02, 0.06, 0.08, 0.94)
 const PAPER := Color("e9e3ce")
 const GOLD := Color("deb777")
 const TEAL := Color("8fd7c0")
 const RED := Color("ff7a5a")
 const REPAIRS := {
-	"beacon": {"title":"Запуск генератора","hint":"Ловите стрелку в зелёном секторе — пробел или ЛКМ. Три точных импульса заведут генератор."},
+	"beacon": {"title":"Запуск генератора","hint":"Дёргайте шнур стартера, когда метка маховика проходит такт сжатия. Три точных рывка — и генератор схватит. Три промаха — свечи зальёт."},
 	"sparks": {"title":"Проводка генератора","hint":"Замкните три контакта, пока проводка не перегорела."},
 	"transmitter": {"title":"Ремонт передатчика","hint":"Подстройте три контура: жмите, когда стрелка в зелёном секторе."},
 	"pump": {"title":"Насос колодца","hint":"Затяните три фланца точными рывками ключа."},
@@ -53,6 +63,9 @@ var embers := 0
 var flame := 0.0
 var steady := 0.0
 var blowing := false
+# Отдельная мини-игра механизма
+var sub: RefCounted
+var fail_kind := "noise"
 
 func setup(owner_game: Node) -> void:
 	game = owner_game
@@ -122,7 +135,10 @@ func _begin(next: Mode, target: Area3D, id: String) -> void:
 	show()
 
 func open_repair(target: Area3D, id: String) -> bool:
+	if GAMES.has(id):
+		return open_game(target, id)
 	_begin(Mode.REPAIR, target, id)
+	fail_kind = "noise"
 	hits = 0
 	misses = 0
 	perfect = false
@@ -130,6 +146,14 @@ func open_repair(target: Area3D, id: String) -> bool:
 	needle_speed = 2.0 + minf(1.6, game.day * .09) + (0.5 if id == "sparks" else 0.0)
 	sector_width = clampf(.75 - game.day * .02, .42, .75)
 	_new_sector()
+	return true
+
+## Отдельная мини-игра механизма (проводка, передатчик, насос, двигатель, корпус, каменоломня).
+func open_game(target: Area3D, id: String) -> bool:
+	_begin(Mode.GAME, target, id)
+	perfect = false
+	sub = GAMES[id].new()
+	sub.begin(self)
 	return true
 
 func open_cook(target: Area3D) -> bool:
@@ -154,6 +178,21 @@ func _new_sector() -> void:
 	sector = fmod(needle + randf_range(1.6, 4.4), TAU)
 
 func handle(event: InputEvent) -> void:
+	if mode == Mode.GAME and sub != null:
+		if event is InputEventKey:
+			if event.physical_keycode == KEY_SPACE:
+				blowing = event.pressed
+			if not event.pressed or event.echo:
+				return
+			if event.physical_keycode == KEY_ESCAPE:
+				cancel()
+			elif result_time <= 0 and not sub.key(event.physical_keycode) and event.physical_keycode in [KEY_SPACE, KEY_E, KEY_ENTER]:
+				sub.act()
+		elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+			blowing = event.pressed
+			if event.pressed and result_time <= 0:
+				sub.click(event.position)
+		return
 	if event is InputEventKey:
 		if event.physical_keycode == KEY_SPACE:
 			blowing = event.pressed
@@ -178,7 +217,7 @@ func act() -> void:
 				hits += 1
 				flash = .25
 				_burst(Color("ffe29a"), 14)
-				game.sound.interact("beacon")
+				_sfx("thump", -6, .8 + hits * .12)
 				if hits >= 3:
 					perfect = misses == 0
 					_finish(true, "Готово! " + String(REPAIRS[kind].title) + " — успешно." + (" Чисто, без промахов!" if perfect else ""))
@@ -190,9 +229,9 @@ func act() -> void:
 				flash = -.3
 				_burst(RED, 22)
 				game.camera_shake = maxf(game.camera_shake, .35)
-				game.sound.cue("dispel")
+				_sfx("cough", -5, randf_range(.85, 1.0))
 				if misses >= 3:
-					_finish(false, "Короткое замыкание! Отдышитесь и попробуйте снова (E).")
+					_finish(false, ("Свечи залило, мотор захлебнулся. Грохот слышно на всём острове. Попробуйте снова (E)." if kind == "beacon" else "Короткое замыкание! Отдышитесь и попробуйте снова (E)."))
 		Mode.COOK:
 			_flip()
 		Mode.FIRE:
@@ -240,6 +279,9 @@ func _process(delta: float) -> void:
 		queue_redraw()
 		return
 	match mode:
+		Mode.GAME:
+			if sub != null:
+				sub.tick(delta)
 		Mode.REPAIR:
 			needle = fmod(needle + needle_speed * delta, TAU)
 			if kind == "sparks" and clock > 14:
@@ -278,19 +320,47 @@ func _finish(ok: bool, text: String) -> void:
 	result_time = 1.1 if ok else 1.6
 	if ok:
 		game.sound.cue("chime")
+	else:
+		_sfx("fail", -6)
 
 func _close_and_apply() -> void:
 	var target := station
 	var ok := success
 	var finished_mode := mode
+	var failed_kind := fail_kind if sub == null else String(sub.fail_kind)
 	close()
-	if not ok or not is_instance_valid(target):
+	if not ok:
+		if finished_mode in [Mode.REPAIR, Mode.GAME]:
+			penalty(failed_kind)
+		return
+	if not is_instance_valid(target):
 		return
 	game.interaction_cooldown = 0
 	game.minigame_result = cook_result if finished_mode == Mode.COOK else ("done" if perfect else "ok")
 	if game.attempt_interaction(target):
 		game.player.play_gesture("interact")
 	game.minigame_result = ""
+
+## Цена неудачи: рассудок, иногда здоровье, а ночью шум привлекает тени.
+func penalty(why: String) -> void:
+	game.sanity = maxf(0, game.sanity - BAL.MINIGAME_FAIL_SANITY)
+	match why:
+		"shock":
+			game.take_damage(BAL.MINIGAME_SHOCK_DAMAGE, "shock")
+		"grab":
+			game.take_damage(BAL.MINIGAME_GRAB_DAMAGE, "grab")
+		"static":
+			game.sound.scare("static", -8, .85)
+	if is_instance_valid(game.scares):
+		game.scares.jolt(.45)
+	var raids: Node = game.night_raids
+	if is_instance_valid(raids) and raids.eligible() and why != "static" and randf() < BAL.MINIGAME_NOISE_ATTRACT_CHANCE:
+		raids.spawn_phantom()
+		game.notify("Грохот разнёсся в темноте. Что-то идёт на звук.", 3.5, 1)
+
+func _sfx(name: String, volume_db := -10.0, pitch := 1.0) -> void:
+	if game.sound.has_method("sfx"):
+		game.sound.sfx(name, volume_db, pitch)
 
 func cancel() -> void:
 	close()
@@ -299,12 +369,13 @@ func cancel() -> void:
 func close() -> void:
 	hide()
 	mode = Mode.NONE
+	sub = null
 	blowing = false
 	game.paused = false
 	game.player.enabled = game.playing and not game.finished
 
-func _burst(color: Color, count: int) -> void:
-	var center := _center()
+func _burst(color: Color, count: int, at: Variant = null) -> void:
+	var center: Vector2 = at if at is Vector2 else _center()
 	for i in count:
 		var angle := randf() * TAU
 		sparks.append({"p":center + Vector2(cos(angle), sin(angle)) * 10, "v":Vector2(cos(angle), sin(angle) - .8) * randf_range(80, 260), "life":randf_range(.3, .8), "c":color})
@@ -335,11 +406,19 @@ func _draw() -> void:
 	if not visible:
 		return
 	var view := get_viewport_rect().size
-	draw_rect(Rect2(Vector2.ZERO, view), Color(0.01, 0.025, 0.03, .72))
+	draw_rect(Rect2(Vector2.ZERO, view), Color(0.005, 0.012, 0.015, .8))
 	var box := Rect2(view.x * .5 - 340, view.y * .5 - 250, 680, 500)
 	draw_rect(box, INK)
-	draw_rect(Rect2(box.position, Vector2(box.size.x, 3)), GOLD)
+	# неровный свет фонаря по краю рамки и тёмные углы
+	var pulse := .55 + .45 * sin(clock * 7.0) * sin(clock * 1.9)
+	draw_rect(Rect2(box.position, Vector2(box.size.x, 3)), Color(GOLD, .5 + pulse * .5))
+	for i in 6:
+		draw_rect(box.grow(-i * 6), Color(0, 0, 0, .1), false, 6)
 	var c := _center()
+	if mode == Mode.GAME and sub != null:
+		_text(String(sub.title()).to_upper(), Vector2(c.x, box.position.y + 44), 26, PAPER)
+		_hint(String(sub.hint()), Vector2(c.x, box.position.y + 74))
+		sub.draw(box, c)
 	match mode:
 		Mode.REPAIR: _draw_repair(box, c)
 		Mode.COOK: _draw_cook(box, c)
@@ -347,8 +426,10 @@ func _draw() -> void:
 	for spark in sparks:
 		draw_circle(spark.p, 2.5, Color(spark.c.r, spark.c.g, spark.c.b, clampf(spark.life * 2, 0, 1)))
 	if result_time > 0:
+		draw_rect(Rect2(box.position.x + 20, box.end.y - 96, box.size.x - 40, 38), Color(0, 0, 0, .85))
 		_text(result_text, Vector2(view.x * .5, box.end.y - 70), 20, TEAL if success else RED)
-	_text("Пробел / ЛКМ — действие   ·   Esc — отложить", Vector2(view.x * .5, box.end.y - 22), 13, Color(PAPER.r, PAPER.g, PAPER.b, .6))
+	var controls := "Пробел / ЛКМ — действие   ·   Esc — отложить" if sub == null else String(sub.controls())
+	_text(controls, Vector2(view.x * .5, box.end.y - 22), 13, Color(PAPER.r, PAPER.g, PAPER.b, .6))
 
 func _draw_repair(box: Rect2, c: Vector2) -> void:
 	var info: Dictionary = REPAIRS.get(kind, REPAIRS.beacon)
@@ -359,6 +440,16 @@ func _draw_repair(box: Rect2, c: Vector2) -> void:
 	draw_circle(c, radius + 14, tint)
 	draw_arc(c, radius, 0, TAU, 96, Color(1, 1, 1, .25), 10)
 	draw_arc(c, radius, sector - sector_width * .5, sector + sector_width * .5, 24, Color("4fd08a"), 12)
+	if kind == "beacon":
+		# маховик генератора: спицы крутятся вместе с меткой, сектор — такт сжатия
+		for k in 5:
+			var spoke := needle + k * TAU / 5
+			draw_line(c, c + Vector2(cos(spoke), sin(spoke)) * (radius - 26), Color(.42, .4, .36), 7)
+		var mark := c + Vector2(cos(sector), sin(sector)) * (radius + 34)
+		_text("СЖАТИЕ", mark + Vector2(0, 5), 12, Color("4fd08a"), HORIZONTAL_ALIGNMENT_CENTER, 90)
+		for k in misses * 3:
+			var puff := c + Vector2(-60 + k * 18, -radius - 10 - fmod(clock * 30 + k * 11, 50))
+			draw_circle(puff, 10 + k, Color(.2, .2, .2, .35))
 	for i in 24:
 		var a := i * TAU / 24
 		draw_line(c + Vector2(cos(a), sin(a)) * (radius - 22), c + Vector2(cos(a), sin(a)) * (radius - 12), Color(1, 1, 1, .25), 2)
