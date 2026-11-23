@@ -5,6 +5,7 @@ extends Node3D
 ## От него прячутся: шкаф в хижине, ниша под лестницей маяка, брезент на лодке.
 ## В укрытии рядом с охотником нужно задержать дыхание (пробел) — запас ограничен и стоит рассудка.
 const HUNTER_VISUAL = preload("res://scripts/hunter_visual.gd")
+const HUNTER_PRESENCE = preload("res://scripts/hunter_presence.gd")
 const Geo = preload("res://scripts/geometry.gd")
 const BI = preload("res://scripts/building_interiors.gd")
 const LI = preload("res://scripts/lighthouse_interior.gd")
@@ -31,6 +32,7 @@ var active := false
 var state := "idle"                ## idle, patrol, investigate, chase, search, flee, room
 var body: CharacterBody3D
 var visual: Node3D                 ## модель + AnimationTree + звуки анимаций (hunter_visual.gd)
+var presence: Node3D               ## отблеск глаз, свет фонаря на нём, отражение в воде (hunter_presence.gd)
 var sniff_time := 0.0              ## пауза «принюхаться» в поиске
 var target := Vector3.ZERO
 var last_known := Vector3.ZERO
@@ -101,6 +103,9 @@ func _ready() -> void:
 	rim.omni_range = 3.6
 	body.add_child(rim)
 	add_child(body)
+	presence = HUNTER_PRESENCE.new()
+	add_child(presence)
+	presence.build(self, visual)
 	body.hide()
 
 func setup() -> void:
@@ -115,10 +120,34 @@ func _build_spots() -> void:
 	_spot("stairs", "Ниша под лестницей маяка", LI.ORIGIN + Vector3(-1.05, 0, .95), "lighthouse")
 	var boat: Node3D = game.world.find_child("FishingBoat", true, false)
 	var boat_at: Vector3 = boat.global_position if is_instance_valid(boat) else Vector3(21, 1, 6)
-	var tarp_spot: Variant = _shore_near(boat_at)
+	var tarp_spot: Variant = _tarp_point(boat_at)
 	_spot("tarp", "Брезент у лодки", tarp_spot if tarp_spot != null else boat_at, "")
 	for s in spots:
 		_spot_visual(s)
+
+const SPOT_REACH_OUTDOOR := 1.5
+const STATION_CLEARANCE := 4.8     ## укрытие не ближе: радиус станции (2.5) + радиус укрытия (1.5) + запас
+
+## Брезент: на берегу у лодки, но так, чтобы его зона E не пересекалась с рыбалкой и другими станциями.
+func _tarp_point(boat_at: Vector3) -> Variant:
+	for r in [3.0, 4.0, 5.0, 6.0, 7.0, 8.5, 10.0]:
+		for i in 16:
+			var p: Vector3 = boat_at + Vector3(cos(i * TAU / 16), 0, sin(i * TAU / 16)) * r
+			var g: Variant = game.night_raids.ground_at(p)
+			if g == null:
+				continue
+			var at: Vector3 = (g as Vector3) - Vector3(0, .35, 0)
+			if station_clear(at):
+				return at
+	return _shore_near(boat_at)
+
+func station_clear(at: Vector3) -> bool:
+	for st in game.stations:
+		if not is_instance_valid(st):
+			continue
+		if Vector2(at.x - st.position.x, at.z - st.position.z).length() < STATION_CLEARANCE:
+			return false
+	return true
 
 func _shore_near(at: Vector3) -> Variant:
 	for r in [0.0, 1.5, 2.5, 3.5]:
@@ -174,6 +203,12 @@ func interact() -> bool:
 	var s := spot_near(game.player.global_position)
 	if s.is_empty():
 		return false
+	# если ближе станция (рыбалка, верстак…) — E достаётся ей
+	if str(s.room).is_empty() and is_instance_valid(game.nearest_station) and game.building_interiors.active.is_empty():
+		var p: Vector3 = game.player.global_position
+		var spot_d := Vector2(p.x - s.at.x, p.z - s.at.z).length()
+		if game.station_distance(game.nearest_station) < spot_d:
+			return false
 	hide_in(str(s.id))
 	return true
 
@@ -241,6 +276,8 @@ func _spawn() -> void:
 		game.notify("Где-то на острове что-то большое ломится сквозь кусты. Оно идёт на шум и на свет. Не бегайте без нужды; укрытия — E.", 9, 1)
 
 func _despawn() -> void:
+	if presence != null:
+		presence.clear()
 	active = false
 	state = "idle"
 	space = ""
@@ -315,6 +352,8 @@ func _tick_visual(delta: float) -> void:
 	visual.door_wait = door_clock > 0 and space.is_empty()
 	visual.sniffing = state == "search" or (not space.is_empty() and hiding())
 	visual.tick(delta)
+	if presence != null:
+		presence.tick(delta)
 
 func _in_light(at: Vector3) -> bool:
 	if game.lighthouse_on and Vector2(at.x + 9, at.z + 7).length() < 8.5:
@@ -354,6 +393,8 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(game):
 		return
 	if preview_freeze:
+		if presence != null and active:
+			presence.tick(delta)
 		return
 	_update_hud()
 	if game.paused:
