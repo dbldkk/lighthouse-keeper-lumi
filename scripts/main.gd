@@ -25,6 +25,7 @@ const PHOTO_MODE = preload("res://scripts/photo_mode.gd")
 const PHOTO_ALBUM = preload("res://scripts/photo_album.gd")
 const BAL = preload("res://scripts/balance.gd")
 const SCARES = preload("res://scripts/scares.gd")
+const DREAD = preload("res://scripts/dread.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -99,6 +100,7 @@ var journal_entries: Array[String] = []
 var camera_shake := 0.0
 ## Ужас: режиссёр пугающих моментов и напряжения.
 var scares: Node
+var dread: Node
 ## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
 var last_safe_position := Vector3(3, 1.3, 4)
 var safe_sample_clock := 0.0
@@ -177,6 +179,10 @@ func _ready() -> void:
 	scares.name = "Scares"
 	scares.game = self
 	add_child(scares)
+	dread = DREAD.new()
+	dread.name = "Dread"
+	dread.game = self
+	add_child(dread)
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -350,6 +356,8 @@ func start_shift() -> void:
 	target_zoom = clampf(target_zoom, 18, 38)
 	if is_instance_valid(scares):
 		scares.reset()
+	if is_instance_valid(dread):
+		dread.reset()
 	playing = true
 	paused = false
 	finished = false
@@ -615,15 +623,21 @@ func update_atmosphere() -> void:
 		night = smoothstep(17.0, 21.0, hour)
 	elif hour < 7:
 		night = 1.0 - smoothstep(5.0, 7.0, hour)
+	# Титульный экран — глухая ночь над островом.
+	if not playing:
+		night = maxf(night, .85)
+	# Мрачная гамма: пасмурный серо-зелёный день, почти чёрная ночь, низкий туман у земли.
 	var env: Environment = world.get_node("CoastalAtmosphere").environment
-	env.ambient_light_energy = lerpf(0.48, 0.18, night)
-	env.ambient_light_color = Color("9da8a2").lerp(Color("657c8e"), night)
-	env.fog_light_color = Color("263435").lerp(Color("0d1921"), night)
-	env.fog_density = lerpf(0.0045, 0.009, night)
-	env.background_color = Color("17282c").lerp(Color("08131c"), night)
+	env.ambient_light_energy = lerpf(0.36, 0.115, night)
+	env.ambient_light_color = Color("8a9591").lerp(Color("4a5f70"), night)
+	env.fog_light_color = Color("2a3434").lerp(Color("060c10"), night)
+	env.fog_density = lerpf(0.0065, 0.0115, night)
+	env.fog_height = 1.6
+	env.fog_height_density = lerpf(0.05, 0.12, night)
+	env.background_color = Color("101a1c").lerp(Color("03070a"), night)
 	var sun: DirectionalLight3D = world.get_node("Sun")
-	sun.light_energy = lerpf(0.90, 0.15, night)
-	sun.light_color = Color("bac6c2").lerp(Color("778ca4"), night)
+	sun.light_energy = lerpf(0.62, 0.07, night)
+	sun.light_color = Color("a6b2b2").lerp(Color("5b6e86"), night)
 	world.get_node("Ocean").material_override.set_shader_parameter("night_factor", night)
 	coastal_life.night_strength = night
 	coastal_life.story_storm = campaign.enabled and campaign.state.night and campaign.entry().night.kind in ["storm","last"]

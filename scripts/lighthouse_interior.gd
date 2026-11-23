@@ -57,7 +57,7 @@ func _build() -> void:
 	room_env.background_color = Color("11191b")
 	room_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	room_env.ambient_light_color = Color("aebfbd")
-	room_env.ambient_light_energy = .43
+	room_env.ambient_light_energy = .30
 
 	var surfaces := PackedVector3Array()
 	for i in range(72):

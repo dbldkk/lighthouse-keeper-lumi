@@ -361,6 +361,13 @@ func set_tension(tension: float, heart_bpm: float, delta: float) -> void:
 		deep_drone.volume_db = move_toward(deep_drone.volume_db, lerpf(-60, -16, tension) if tension > .05 else -70.0, 30 * delta)
 	if muffle != null:
 		muffle.cutoff_hz = lerpf(20000, 1400, smoothstep(.45, 1.0, tension))
+	# Фон дышит страхом: ветер громче, ночной гул ниже и тяжелее.
+	if is_instance_valid(wind) and wind.volume_db > -65:
+		wind.volume_db += tension * 6.0
+	if is_instance_valid(drone):
+		drone.pitch_scale = lerpf(1.0, .82, tension)
+		if drone.volume_db > -65:
+			drone.volume_db += tension * 5.0
 	heart_rate = heart_bpm
 	heart_volume = lerpf(-26, -4, clampf((heart_bpm - 60) / 80.0, 0, 1))
 	if heart_bpm <= 0 or not is_instance_valid(heart) or heart.stream == null:

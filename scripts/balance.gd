@@ -71,6 +71,26 @@ const SCARE_CHANCE_PER_SEC := 0.035        ## базовый шанс в сек�
 const SCARE_TYPE_COOLDOWN := 120.0         ## один и тот же тип не чаще
 const SCARE_DAY_CHANCE_MULT := 0.25        ## днём пугаем реже (туман, шаги)
 
+# ---------------------------------------------------------------- мрак (scripts/dread.gd)
+const DREAD_DAY_LEVEL := 0.55              ## сила мрачной цветокоррекции днём (ночью — 1)
+const DREAD_SIGHT_DAY := 1.15              ## радиус видимости днём, доля высоты экрана
+const DREAD_SIGHT_LANTERN := 0.52          ## ночью с фонарём
+const DREAD_SIGHT_DARK := 0.32             ## ночью без фонаря
+const DREAD_SIGHT_FOG := 0.30              ## в тумане
+const DREAD_MIST_DAY := 0.35               ## клочья тумана на экране днём
+const DREAD_MIST_NIGHT := 0.6
+const DREAD_FLICKER := 0.35                ## глубина мерцания ламп
+const DREAD_GLITCH_RATE := 0.12            ## сбоев кадра в секунду при нулевом рассудке
+const DREAD_AMBIENT_GAP_MIN := 14.0        ## далёкие скрипы и стуки вокруг: пауза, с
+const DREAD_AMBIENT_GAP_MAX := 32.0
+const DREAD_AMBIENT_DB := -13.0
+const WATCHER_MIN_DIST := 11.0             ## наблюдатель появляется на краю видимости
+const WATCHER_MAX_DIST := 16.0
+const WATCHER_VANISH_DIST := 8.0           ## подойдёте ближе — исчезнет
+const WATCHER_SECONDS := 7.0
+const SWIMMER_SECONDS := 5.5               ## «что-то в воде» поднимается и уходит под воду
+const DREAD_STORY_SANITY := 1.5            ## рассудок за найденный след прошлого
+
 # ---------------------------------------------------------------- мини-игры механизмов
 const MINIGAME_FAIL_SANITY := 5.0          ## рассудок за проваленную мини-игру
 const MINIGAME_DECOY_SANITY := 4.0         ## чужой голос в эфире, чёрная метка, рука из пробоины

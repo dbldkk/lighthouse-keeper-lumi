@@ -41,7 +41,9 @@ func _process(delta: float) -> void:
 		boat.position = boat_origin + Vector3(0, sin(clock * 1.4) * 0.065, 0)
 		boat.rotation.z = sin(clock * 1.1) * 0.025
 	for index in lamps.size():
-		lamps[index].light_energy = 1.8 + sin(clock * 2 + index * 3) * 0.09 + sin(clock * 7 + index) * 0.035
+		var dread: Node = get_parent().get_parent().get("dread") if get_parent().get_parent() != null else null
+		var dim: float = dread.flicker(index * 7.1) if is_instance_valid(dread) else 1.0
+		lamps[index].light_energy = (1.8 + sin(clock * 2 + index * 3) * 0.09 + sin(clock * 7 + index) * 0.035) * dim
 
 func cycle_weather() -> void:
 	weather_mode = (weather_mode + 1) % 3

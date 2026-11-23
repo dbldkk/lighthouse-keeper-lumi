@@ -74,7 +74,7 @@ func setup(world: Node3D) -> void:
 	room_env.background_color = Color("10191c")
 	room_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	room_env.ambient_light_color = Color("a9bdbd")
-	room_env.ambient_light_energy = .43
+	room_env.ambient_light_energy = .30
 
 func _install(asset: String, at: Vector3, parent: Node3D) -> Node3D:
 	var packed: PackedScene = MODELS[asset]
