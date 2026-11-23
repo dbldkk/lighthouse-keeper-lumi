@@ -315,9 +315,11 @@ func close() -> void:
 	selfie = false
 	STATION.hide_markers = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	game.camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	game.camera.fov = 75
-	game.camera.near = .05
+	# Полный возврат изометрической камеры: проекция, зум в пределах 18–38 и выход из «обзора».
+	# Раньше после снимка радуги (её ищут через обзор O) камера оставалась в обзоре на 78,
+	# а колесо мыши в обзоре молча игнорировалось — «приблизить не получается».
+	fov = 55
+	game.restore_camera()
 	game.player.get_node("Visual").show()
 	game.player.enabled = game.playing and not game.paused and not game.finished
 	if game.playing and not game.finished:
@@ -405,6 +407,13 @@ func shoot() -> void:
 	var path := "%s/photo_%02d.png" % [dir, photos.size() + 1]
 	image.save_png(path)
 	photos.append({"path":path,"caption":caption,"day":game.day,"selfie":selfie,"moment":String(subject.get("id", ""))})
+	if not active:
+		# Фоторежим закрыли, пока кадр сохранялся: не возвращаем видоискатель на экран.
+		shooting = false
+		if not subject.is_empty():
+			moments_done[subject.id] = "taken"
+			_clear_moment()
+		return
 	show()
 	flash = 1.0
 	game.sound.cue("dispel")
