@@ -73,7 +73,7 @@ func run() -> void:
 		nominal_seconds += float(record.night.seconds)
 	nominal_seconds += game.campaign.DAY_SECONDS*(days-1)
 	check(titles.size()==days and valid,"All distinct shifts refer only to reachable existing stations")
-	check(nominal_seconds>=1800 and nominal_seconds<2400 if legacy_run else nominal_seconds>=780 and nominal_seconds<1500,"The nominal timer fits the selected campaign length")
+	check(nominal_seconds>=1800 and nominal_seconds<3300 if legacy_run else nominal_seconds>=780 and nominal_seconds<1900,"The nominal timer fits the selected campaign length (%.0f s; v1.3 day = %.0f s)" % [nominal_seconds, game.campaign.DAY_SECONDS])
 	check(not take("shelter") and not game.campaign.state.night,"Night cannot be skipped before the first objectives")
 	game.set_building_interior("")
 	check(not game.campaign.submit_code("314"),"Correct radio code cannot bypass the campaign before the final watch")

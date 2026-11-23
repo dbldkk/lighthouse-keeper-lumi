@@ -47,6 +47,7 @@ var fov := 75.0
 var subtitles := true
 var bindings := {}
 var tutorial_done := false
+var difficulty := "normal"           ## выбор в главном меню; копируется в новую кампанию
 
 func _init() -> void:
 	reset_bindings()
@@ -83,6 +84,9 @@ func load_preferences() -> void:
 			if code > 0 and code not in RESERVED:
 				bindings[a[0]] = code
 		tutorial_done = bool(config.get_value("progress","tutorial_done",false))
+		difficulty = str(config.get_value("progress","difficulty","normal"))
+		if difficulty not in ["normal", "nightmare"]:
+			difficulty = "normal"
 	high_quality = quality >= 1
 	apply()
 
@@ -105,6 +109,7 @@ func save_preferences() -> Error:
 	for a in ACTIONS:
 		config.set_value("keys",a[0],int(bindings[a[0]]))
 	config.set_value("progress","tutorial_done",tutorial_done)
+	config.set_value("progress","difficulty",difficulty)
 	return config.save(path)
 
 # ---------------------------------------------------------------- клавиши

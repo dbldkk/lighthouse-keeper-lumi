@@ -5,7 +5,9 @@ const SHORT_DAYS := 14
 const LEGACY_DAYS := 30
 const SHORT_CLUES: Array[int] = [5, 8, 11]
 const LEGACY_CLUES: Array[int] = [9, 17, 26]
-const DAY_SECONDS := 50.0
+const DAY_SECONDS := 75.0         ## v1.3: было 50 — день длиннее в 1.5 раза (07:00 → 19:30)
+const DUSK_GRACE := 25.0           ## сумерки 19:30 → 20:00; дальше ночь наступает в любом случае
+const NIGHT_OVERTIME := 40.0       ## если ночное задание не выполнено/маяк погас — рассвет всё равно придёт
 const CODE := "314"
 const FIRST_RADIO_AT := 2.0
 const FIRST_SHADOW_AT := 5.5
@@ -257,6 +259,27 @@ func begin_night() -> bool:
 	if game.day==1 and game.building_interiors.active!="cabin":
 		game.notify("Войдите в хижину по E и подойдите к койке, чтобы начать дежурство.", 7)
 		return false
+	_start_night()
+	return true
+
+## Сумерки кончились — ночь наступает по расписанию, даже если маяк не горит и задачи не закончены.
+## (v1.2: часы вставали на 19:30 и ждали, пока всё будет готово, — без топлива время стояло.)
+func force_night() -> void:
+	if state.night:return
+	state.unfinished = not day_complete()
+	var missing := prep_missing()
+	_start_night()
+	var warn := "Ночь наступила. "
+	if not game.lighthouse_on:
+		warn += "Маяк не горит: держитесь света фонаря, прячьтесь и ищите топливо. В полной темноте долго не выжить."
+	elif not missing.is_empty():
+		warn += missing
+	if state.unfinished:
+		warn += "\nЗадачи дня не закончены — утром день продолжится."
+	game.alert("НОЧЬ", "Маяк не горит — берегите свет" if not game.lighthouse_on else "Продержитесь до рассвета", 6)
+	game.notify(warn, 10, 1)
+
+func _start_night() -> void:
 	state.night = true
 	state.night_clock = 0.0
 	state.safe_clock = 0.0
@@ -271,7 +294,6 @@ func begin_night() -> bool:
 	game.spawn_clock = 0
 	game.night_spawned = false
 	game.notify(entry().night.text,12)
-	return true
 
 func advance(delta: float) -> void:
 	if not enabled or delta<=0:return
@@ -279,15 +301,23 @@ func advance(delta: float) -> void:
 	state.run_seconds += delta
 	if not state.night:
 		state.day_clock += delta
-		game.hour = 7+12.5*minf(1,float(state.day_clock)/DAY_SECONDS)
-		if state.day_clock>=35 and not state.dusk_warned and game.day<calendar_days():
+		if state.day_clock<=DAY_SECONDS:
+			game.hour = 7+12.5*float(state.day_clock)/DAY_SECONDS
+		else:
+			# часы не стоят: сумерки идут до 20:00
+			game.hour = 19.5+.5*minf(1,(float(state.day_clock)-DAY_SECONDS)/DUSK_GRACE) - (.01 if game.day==1 or game.day>=calendar_days() else 0.0)
+		if state.day_clock>=DAY_SECONDS*.7 and not state.dusk_warned and game.day<calendar_days():
 			state.dusk_warned = true
 			game.notify("Скоро ночь. Проверьте задачи, маяк, укрепление и фонарь. У хижины можно приблизить закат.",7)
 		if game.day>1 and game.day<calendar_days() and state.day_clock>=DAY_SECONDS and day_complete() and prep_missing().is_empty():begin_night()
+		elif game.day>1 and game.day<calendar_days() and state.day_clock>=DAY_SECONDS+DUSK_GRACE:force_night()
 		return
 	state.night_clock += delta
 	var duration: float = entry().night.seconds
-	game.hour = 20+3.5*minf(1,float(state.night_clock)/maxf(1,duration))
+	if state.night_clock<=duration:
+		game.hour = 20+3.5*float(state.night_clock)/maxf(1,duration)
+	else:
+		game.hour = 23.5+6.0*minf(1,(float(state.night_clock)-duration)/NIGHT_OVERTIME)   # до 05:30
 	if game.day==1:
 		advance_first_watch(delta, duration)
 		return
@@ -308,6 +338,12 @@ func advance(delta: float) -> void:
 			game.notify(night_instruction(),8)
 	# Оборона длится ровно отведённое время. Затем рассвет наступает сам — если свет и укрытие целы.
 	if state.night_clock>=duration and state.event_done and prep_missing().is_empty() and game.day<calendar_days():
+		finish_night()
+	elif state.night_clock>=duration+NIGHT_OVERTIME and game.day<calendar_days():
+		# рассвет приходит сам; несделанное ночное задание стоит рассудка
+		if not state.event_done:
+			game.sanity = maxf(0,game.sanity-10)
+		game.night_report = "Рассвет пришёл сам. Ночь вы пережили, но не всё сделали." if not state.event_done or not prep_missing().is_empty() else game.night_report
 		finish_night()
 
 func complete_first_watch(route: String) -> void:
@@ -394,6 +430,11 @@ func finish_night() -> void:
 		game.first_shift_demo.start_contact()
 		return
 	var completed: int = game.day
+	if is_instance_valid(game.achievements):
+		game.achievements.on_night_survived(completed)
+	if state.get("unfinished", false):
+		_repeat_day()
+		return
 	if completed not in state.completed_days:
 		state.completed_days.append(completed)
 		resources(entry().reward)
@@ -412,6 +453,25 @@ func finish_night() -> void:
 	var report: String = game.night_report
 	game.night_report = ""
 	game.notify((report+"\n" if not report.is_empty() else "")+"День %d · %s. %s" % [game.day,entry().title,entry().brief],11)
+	game.save_checkpoint()
+
+## Ночь пришла раньше, чем закончены задачи дня: утро того же дня (прогресс задач сохраняется).
+func _repeat_day() -> void:
+	state.unfinished = false
+	state.beacon_charge = maxi(0,int(state.beacon_charge)-1)
+	for key in ["day_clock","night_clock","safe_clock"]:state[key]=0.0
+	for key in ["night","event_done","blackout","need_radio","dusk_warned"]:state[key]=false
+	state.cue = 0
+	game.hour = 7
+	game.sanity = minf(100,game.sanity+5)
+	game.lighthouse_on = false
+	game.beacon.set_powered(false)
+	game.clear_enemies()
+	game.night_spawned = false
+	game.was_night = false
+	var report: String = game.night_report
+	game.night_report = ""
+	game.notify((report+"\n" if not report.is_empty() else "")+"Рассвет. День %d · %s — задачи ещё не закончены. %s" % [game.day,entry().title,entry().brief],11)
 	game.save_checkpoint()
 
 func spawn_threats() -> void:

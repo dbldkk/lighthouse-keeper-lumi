@@ -33,6 +33,9 @@ const SUPPLIES = preload("res://scripts/supplies.gd")
 const ESCALATION = preload("res://scripts/escalation.gd")
 const SMALL_SCARES = preload("res://scripts/small_scares.gd")
 const TUTORIAL = preload("res://scripts/tutorial.gd")
+const DIFFICULTY = preload("res://scripts/difficulty.gd")
+const ACHIEVEMENTS = preload("res://scripts/achievements.gd")
+const DARKNESS = preload("res://scripts/darkness.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -114,6 +117,9 @@ var save_points: Node3D
 var supplies: Node3D
 var small_scares: Node3D
 var tutorial: Node
+var achievements: Node
+var darkness: Node
+var difficulty := "normal"           ## normal / nightmare (scripts/difficulty.gd)
 var escalation: Node
 ## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
 var last_safe_position := Vector3(3, 1.3, 4)
@@ -229,6 +235,16 @@ func _ready() -> void:
 	tutorial.game = self
 	add_child(tutorial)
 	tutorial.setup()
+	achievements = ACHIEVEMENTS.new()
+	achievements.name = "Achievements"
+	achievements.game = self
+	if DisplayServer.get_name() == "headless":
+		achievements.path = "user://automated_records.cfg"
+	add_child(achievements)
+	darkness = DARKNESS.new()
+	darkness.name = "Darkness"
+	darkness.game = self
+	add_child(darkness)
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -340,14 +356,16 @@ func start_or_resume() -> void:
 			return_to_title()
 		else:
 			start_first_shift_demo()
-	elif finished and not last_run_won and campaign.enabled and FileAccess.file_exists(checkpoint_path):
+	elif finished and not last_run_won and campaign.enabled and diff("saves") and FileAccess.file_exists(checkpoint_path):
 		retry_day()
 	else:
 		first_shift_demo.reset()
 		campaign.enabled = true
 		checkpoints_enabled = true
 		playing = false
+		difficulty = DIFFICULTY.valid(preferences.difficulty)
 		start_shift()
+		achievements.note("run")
 
 func start_shift() -> void:
 	if playing and paused and not finished:
@@ -412,10 +430,13 @@ func start_shift() -> void:
 		lore.reset()
 	if is_instance_valid(supplies):
 		supplies.reset()
+		supplies.oil_reserve = supplies.OIL_START * float(diff("oil_start"))
 	if is_instance_valid(escalation):
 		escalation.reset()
 	if is_instance_valid(small_scares):
 		small_scares.reset()
+	if is_instance_valid(darkness):
+		darkness.reset()
 	playing = true
 	paused = false
 	finished = false
@@ -429,12 +450,39 @@ func start_shift() -> void:
 	player.enabled = true
 	overview = false
 	hud.show_game()
-	notify("День 1. Найдите канистру и запустите маяк. Текущая цель подсвечена бирюзовым столбом света.", 10)
+	notify("День 1. Найдите канистру и запустите маяк. Текущая цель подсвечена бирюзовым столбом света." + ("\nСложность «Кошмар»: охотник быстрее, масла меньше, сохранений нет." if difficulty == "nightmare" else ""), 10)
 	if is_instance_valid(tutorial):
 		tutorial.begin()
 	save_checkpoint()
 
+# ---------------------------------------------------------------- отблеск канистры
+var fuel_glint_time := 0.0          ## после подсказки «нужно топливо» канистра на тропе слегка поблёскивает
+var fuel_glint: OmniLight3D
+var fuel_glint_clock := 0.0
+
+func update_fuel_glint(delta: float) -> void:
+	fuel_glint_time = maxf(0, fuel_glint_time - delta)
+	var can: Node3D = world.find_child("FuelCan", true, false)
+	var want := fuel_glint_time > 0 and can != null and can.is_visible_in_tree()
+	if not want:
+		if fuel_glint != null:
+			fuel_glint.visible = false
+		return
+	if fuel_glint == null:
+		fuel_glint = OmniLight3D.new()
+		fuel_glint.name = "FuelGlint"
+		fuel_glint.light_color = Color("ffd38a")
+		fuel_glint.omni_range = 2.2
+		fuel_glint.shadow_enabled = false
+		world.add_child(fuel_glint)
+	fuel_glint_clock += delta
+	fuel_glint.visible = true
+	fuel_glint.global_position = can.global_position + Vector3(0, .7, 0)
+	# редкий мягкий блик, а не мигалка
+	fuel_glint.light_energy = .25 + .9 * pow(maxf(0, sin(fuel_glint_clock * 2.2)), 6)
+
 func reset_world_state() -> void:
+	fuel_glint_time = 0
 	clear_enemies()
 	world.find_child("FuelCan", true, false).show()
 	world.find_child("FuelHandle", true, false).show()
@@ -452,6 +500,7 @@ func reset_world_state() -> void:
 
 func _process(delta: float) -> void:
 	expedition.advance(delta)
+	update_fuel_glint(delta)
 	if fishing.is_open() and playing and not paused and not finished:
 		var old_phase := fishing.phase
 		var held := Input.is_physical_key_pressed(KEY_SPACE) or Input.is_physical_key_pressed(KEY_E) or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
@@ -813,6 +862,7 @@ func attempt_interaction(station: Area3D) -> bool:
 				return false
 			if inventory.fuel < 1 and (not campaign.enabled or int(campaign.state.beacon_charge)<=0):
 				notify("Генератору нужно топливо. Проверьте ящики на тропе.")
+				fuel_glint_time = 25.0
 				return false
 			if not campaign.enabled or int(campaign.state.beacon_charge)<=0:
 				inventory.fuel -= 1
@@ -1146,6 +1196,8 @@ func finish_shift(won: bool) -> void:
 		lore.ending = "light"
 	finished = true
 	last_run_won = won
+	if is_instance_valid(achievements) and campaign.enabled:
+		achievements.on_run_finished(won)
 	player.enabled = false
 	if photo.active:
 		photo.close()
@@ -1379,6 +1431,7 @@ func save_game(quiet: bool = false) -> bool:
 	state["small_scares"] = small_scares.save_data()
 	state["hunter"] = {"announced": hunter.announced, "catches": hunter.catches}
 	state["dread_found"] = dread.found.keys()
+	state["difficulty"] = difficulty
 	for station in stations:
 		if station.station_id == "wood":
 			state.wood_remaining = station.remaining
@@ -1399,6 +1452,9 @@ func save_game(quiet: bool = false) -> bool:
 
 ## Ручное сохранение — только у журнала смены (хижина, маяк).
 func request_save() -> bool:
+	if not diff("saves"):
+		notify("Кошмар: сохранений нет. Только вы и ночь.", 4, 1)
+		return false
 	var book: Dictionary = save_points.near_book()
 	if book.is_empty():
 		notify("Сохраниться можно только у журнала смены: в хижине или на первом этаже маяка (E у журнала).", 5)
@@ -1408,7 +1464,12 @@ func request_save() -> bool:
 func is_instance_valid_hunter_near() -> bool:
 	return is_instance_valid(hunter) and hunter.active and hunter.state == "chase"
 
+## Параметр текущей сложности (см. scripts/difficulty.gd).
+func diff(key: String) -> Variant:
+	return DIFFICULTY.value(difficulty, key)
+
 func save_checkpoint() -> void:
+	if not diff("saves"):return
 	if first_shift_demo.active() or not campaign.enabled or not checkpoints_enabled or loading_save:return
 	if DisplayServer.get_name()=="headless" and not checkpoint_path.begins_with("user://automated_"):return
 	var original := save_path
@@ -1446,6 +1507,7 @@ func load_game() -> bool:
 		return false
 	playing = false
 	loading_save = true
+	difficulty = DIFFICULTY.valid(str(state.get("difficulty", "normal")))
 	start_shift()
 	campaign.select_calendar(saved_calendar(state))
 	for key in inventory.keys():
@@ -1547,6 +1609,7 @@ func capture_preview() -> void:
 	get_tree().quit(0 if result == OK else 1)
 
 func start_first_shift_demo() -> void:
+	difficulty = "normal"
 	playing = false
 	campaign.enabled = true
 	# Mark the episode before start_shift can write a campaign checkpoint.
@@ -1560,6 +1623,7 @@ func start_first_shift_demo() -> void:
 
 ## Главное меню → «Обучение»: сбросить флаг и начать новую смену с подсказками.
 func replay_tutorial() -> void:
+	difficulty = "normal"
 	preferences.tutorial_done = false
 	preferences.save_preferences()
 	first_shift_demo.reset()
@@ -1587,6 +1651,7 @@ func return_to_title() -> void:
 	hud.show_menu("title")
 
 func start_demo() -> void:
+	difficulty = "normal"
 	# Separate demonstration snapshot; never overwrites the player's save.
 	first_shift_demo.reset()
 	playing = false
@@ -1741,12 +1806,14 @@ func update_lantern_oil(delta: float) -> void:
 		return
 	if not player.lantern_on or not is_night() or first_shift_demo.active():
 		return
-	lantern_oil = maxf(0, lantern_oil - BAL.LANTERN_OIL_DRAIN * delta)
+	lantern_oil = maxf(0, lantern_oil - BAL.LANTERN_OIL_DRAIN * float(diff("oil_drain")) * delta)
 	if lantern_oil < BAL.LANTERN_OIL_LOW and not oil_warned:
 		oil_warned = true
 		alert("МАСЛО НА ИСХОДЕ", "Фонарь скоро погаснет. Долейте масло в любом помещении", 5)
 		sound.cue("flicker")
 	if lantern_oil <= 0:
+		if is_instance_valid(achievements):
+			achievements.note("oil_out")
 		player.lantern_on = false
 		player.play_gesture("lantern")
 		player._sync_lantern()

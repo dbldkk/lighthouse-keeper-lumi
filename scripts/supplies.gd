@@ -237,8 +237,11 @@ func fire_flare() -> bool:
 	game.sound.sfx("zap", -2, .55, at + Vector3.UP * 3)
 	game.camera_shake = maxf(game.camera_shake, .2)
 	# отгоняет охотника и выжигает тени рядом
+	if is_instance_valid(game.achievements):
+		game.achievements.note("flare")
 	if is_instance_valid(game.hunter):
-		game.hunter.repel(at, FLARE_RADIUS + 4, 18.0)
+		if game.hunter.repel(at, FLARE_RADIUS + 4, 18.0) and is_instance_valid(game.achievements):
+			game.achievements.on_flare_repelled()
 	for e in game.enemies:
 		if is_instance_valid(e) and e.global_position.distance_to(at) < FLARE_RADIUS * .7 and e.has_method("burn"):
 			e.burn(1000)

@@ -74,9 +74,10 @@ def main():
     extra = os.path.join(os.path.dirname(LINES), "extra_lines.json")
     if os.path.exists(extra):
         lines.update(json.load(open(extra, encoding="utf-8")))
-    lore = os.path.join(os.path.dirname(LINES), "lore_lines.json")  # кассеты и «ваш голос»
-    if os.path.exists(lore):
-        lines.update(json.load(open(lore, encoding="utf-8")))
+    for name in ("lore_lines.json", "round7_lines.json"):  # кассеты, «ваш голос», события v1.3
+        path = os.path.join(os.path.dirname(LINES), name)
+        if os.path.exists(path):
+            lines.update(json.load(open(path, encoding="utf-8")))
     for line_id, line in lines.items():
         raw = os.path.join(raw_dir, line_id + ".wav")
         if not os.path.exists(raw):

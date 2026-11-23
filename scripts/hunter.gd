@@ -69,7 +69,8 @@ func _ready() -> void:
 	body = CharacterBody3D.new()
 	body.name = "HunterBody"
 	body.collision_layer = 0
-	body.collision_mask = 1
+	# Не упирается в ступеньки и мелкие ящики: стены обходит лучами (_passable), высоту берёт с земли.
+	body.collision_mask = 0
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = .42
@@ -210,6 +211,8 @@ func interact() -> bool:
 		if game.station_distance(game.nearest_station) < spot_d:
 			return false
 	hide_in(str(s.id))
+	if is_instance_valid(game.achievements):
+		game.achievements.note("hid")
 	return true
 
 func hide_in(id: String) -> void:
@@ -285,18 +288,45 @@ func _despawn() -> void:
 		body.hide()
 		body.global_position = Vector3(0, -50, 0)
 
+## Дальняя точка для появления/бегства: на земле и НЕ в свете (маяк, костёр, хижина).
+## Раньше точка могла оказаться в круге света маяка: охотник появлялся там, сразу «пугался»
+## и вставал на месте — цель бегства совпадала с его позицией, а свет не отпускал.
 func _far_point(min_dist: float) -> Vector3:
 	var p: Vector3 = game.player.global_position if space.is_empty() else game.map_player_position()
-	var best := Vector3(-20, 1, 20)
+	var good: Array = []
+	var best := Vector3.ZERO
 	var best_d := -1.0
 	for point in game.night_raids.EDGE_POINTS:
-		var d := Vector2(point.x - p.x, point.z - p.z).length()
-		if d >= min_dist and rng.randf() < .6:
-			return point
+		var g: Variant = game.night_raids.ground_at(point)
+		var at: Vector3 = (g as Vector3) - Vector3(0, .35, 0) if g != null else point
+		if _in_light(at):
+			continue
+		var d := Vector2(at.x - p.x, at.z - p.z).length()
+		if d >= min_dist and _flat(at, body.global_position) > 3.0:
+			good.append(at)
 		if d > best_d:
 			best_d = d
-			best = point
-	return best
+			best = at
+	if not good.is_empty():
+		return good[rng.randi_range(0, good.size() - 1)]
+	if best_d >= 0:
+		return best
+	return _escape_point(body.global_position)
+
+## Точка в 12 м от центра света, по направлению «от света».
+func _escape_point(from: Vector3) -> Vector3:
+	var center := Vector3(-9, 1, -7)
+	var away := Vector3(from.x - center.x, 0, from.z - center.z)
+	if away.length() < .5:
+		away = Vector3(1, 0, 1)
+	away = away.normalized()
+	for turn in [0.0, .6, -.6, 1.2, -1.2, 1.8, -1.8, 2.6, -2.6]:
+		var dir := away.rotated(Vector3.UP, turn)
+		for r in [12.0, 15.0, 10.0]:
+			var g: Variant = game.night_raids.ground_at(center + dir * r)
+			if g != null and not _in_light((g as Vector3) - Vector3(0, .35, 0)):
+				return (g as Vector3) - Vector3(0, .35, 0)
+	return Vector3(-20, 1, 20)
 
 func _patrol_point() -> Vector3:
 	var pts: Array = []
@@ -308,9 +338,13 @@ func _patrol_point() -> Vector3:
 	if rng.randf() < .45 * aggression:
 		var p: Vector3 = game.map_player_position()
 		var near: Variant = game.night_raids.ground_at(p + Vector3(rng.randf_range(-9, 9), 0, rng.randf_range(-9, 9)))
-		if near != null:
+		if near != null and not _in_light(near):
 			return near
-	return pts[rng.randi_range(0, pts.size() - 1)]
+	for i in 8:
+		var pick: Vector3 = pts[rng.randi_range(0, pts.size() - 1)]
+		if not _in_light(pick):
+			return pick
+	return _escape_point(body.global_position)
 
 # ---------------------------------------------------------------- слух и свет
 ## Шум в точке: громкость 0..1 (1 ≈ слышно через пол-острова).
@@ -414,6 +448,7 @@ func _process(delta: float) -> void:
 	_tick_breath(delta)
 	if space.is_empty():
 		_tick_outside(delta)
+		_watchdog(delta)
 	else:
 		_tick_room(delta)
 	_tick_audio(delta)
@@ -433,8 +468,18 @@ func _tick_outside(delta: float) -> void:
 	# Луч фонаря в упор — вздрагивает и замирает (но теперь знает, где вы).
 	if state != "flee" and game.lantern_beam.focusing and game.lantern_beam.in_cone(here + Vector3.UP):
 		last_known = p
+		beam_clock += delta
 		if state_time > .8 and rng.randf() < delta * 1.5:
 			game.sound.sfx("groan", -4, .55, here + Vector3.UP * 2)
+		# держите луч на нём — отступит (но запомнит, где вы)
+		if beam_clock > BEAM_RETREAT_AFTER and d < 9.0:
+			beam_clock = 0
+			repel_time = 4.0
+			_set_state("flee")
+			target = _far_point(16.0)
+			game.sound.sfx("groan", -2, .5, here + Vector3.UP * 2)
+	else:
+		beam_clock = maxf(0, beam_clock - delta)
 	match state:
 		"patrol":
 			if _can_see_player():
@@ -459,20 +504,35 @@ func _tick_outside(delta: float) -> void:
 				last_known = p
 				target = p
 			elif not _player_outside():
-				target = game.map_player_position()
+				# смотритель внутри — идёт к двери этого помещения и ломится в неё
+				target = _door_of(_room_of_player()) if _can_follow_into(_room_of_player()) else game.map_player_position()
 			else:
 				_set_state("search")
-			if d > LOSE_DIST * aggression:
+			# внутри помещения смотритель «там, где дверь», а не в далёкой комнате-сцене
+			var lose_d: float = d if _player_outside() else _flat(here, game.map_player_position())
+			if lose_d > LOSE_DIST * aggression:
 				_set_state("search")
 			if _player_outside() and not hiding() and d < CATCH_DIST:
 				_catch()
 				return
+			if not _player_outside() and not _can_follow_into(_room_of_player()):
+				# туда ему не пройти (рубка, радиостанция, горящий маяк) — кружит снаружи и ищет
+				last_known = body.global_position
+				_set_state("search")
+				target = _patrol_point()
 			_move(target, CHASE_SPEED * minf(aggression, 1.25), delta)
 			if not _player_outside():
 				_try_follow_inside(delta)
 		"search":
+			var room_in := _room_of_player()
 			if _can_see_player():
 				_set_state("chase")
+			elif not _player_outside() and _can_follow_into(room_in) and _flat(here, game.map_player_position()) < LOSE_DIST * aggression:
+				# знает, куда вы скрылись: идёт прямо к двери и ломится
+				target = _door_of(room_in)
+				sniff_time = 0
+				_move(target, INVESTIGATE_SPEED, delta)
+				_try_follow_inside(delta)
 			elif state_time > SEARCH_SECONDS:
 				_set_state("patrol")
 				target = _patrol_point()
@@ -493,10 +553,42 @@ func _tick_outside(delta: float) -> void:
 				if not _player_outside():
 					_try_follow_inside(delta)
 		"flee":
+			if _flat(body.global_position, target) < 1.5 or _in_light(target):
+				target = _escape_point(body.global_position) if _in_light(body.global_position) else _far_point(18.0)
 			_move(target, CHASE_SPEED, delta)
 			if repel_time <= 0 and not _in_light(body.global_position):
 				_set_state("patrol")
 				target = _patrol_point()
+
+## Сторож: если в «ходячем» состоянии он несколько секунд не сдвинулся — новая цель.
+var still_clock := 0.0
+var still_from := Vector3.ZERO
+func _watchdog(delta: float) -> void:
+	if state in ["search"] and sniff_time > 0:
+		still_clock = 0
+		return
+	if door_clock > 0:
+		still_clock = 0
+		return
+	if body.global_position.distance_to(still_from) > .6:
+		still_from = body.global_position
+		still_clock = 0
+		return
+	still_clock += delta
+	if still_clock > 4.0:
+		still_clock = 0
+		unstuck_count += 1
+		if _in_light(body.global_position):
+			target = _escape_point(body.global_position)
+			_set_state("flee")
+		elif state == "chase":
+			_set_state("search")
+			target = _patrol_point()
+		else:
+			target = _patrol_point()
+var unstuck_count := 0
+var beam_clock := 0.0
+const BEAM_RETREAT_AFTER := 1.3
 
 func _flat(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x - b.x, a.z - b.z).length()
@@ -508,19 +600,30 @@ func _move(to: Vector3, speed: float, delta: float) -> void:
 		body.velocity = Vector3.ZERO
 		return
 	dir = dir.normalized()
-	# не заходит в воду: пробует обойти
-	var ahead: Variant = game.night_raids.ground_at(here + dir * 1.2)
-	if ahead == null:
-		for turn in [.7, -.7, 1.4, -1.4, 2.1, -2.1]:
-			var alt := dir.rotated(Vector3.UP, turn)
-			if game.night_raids.ground_at(here + alt * 1.2) != null:
+	speed *= float(game.diff("hunter_speed"))
+	if is_instance_valid(game.darkness):
+		speed *= 1.0 + .5 * game.darkness.hunter_bonus()      # без маяка смелее и быстрее
+	# не заходит в воду и обходит стены/дома: пробует повернуть, держит обход немного дольше
+	if detour_time > 0:
+		detour_time -= delta
+		if _passable(here, detour_dir):
+			dir = detour_dir
+		else:
+			detour_time = 0
+	if detour_time <= 0 and not _passable(here, dir):
+		var side := 1.0 if rng.randf() < .5 else -1.0
+		for turn in [.5, -.5, 1.0, -1.0, 1.5, -1.5, 2.1, -2.1, 2.7, -2.7]:
+			var alt := dir.rotated(Vector3.UP, turn * side)
+			if _passable(here, alt):
 				dir = alt
+				detour_dir = alt
+				detour_time = .7
 				break
 	body.velocity = dir * speed
-	body.move_and_slide()
+	body.global_position += body.velocity * delta     # без физических столкновений — см. _passable
 	ground_clock -= delta
 	if ground_clock <= 0:
-		ground_clock = .2
+		ground_clock = .1
 		var g: Variant = game.night_raids.ground_at(body.global_position)
 		if g != null:
 			body.global_position.y = (g as Vector3).y - .35
@@ -532,8 +635,27 @@ func _move(to: Vector3, speed: float, delta: float) -> void:
 		stuck_clock = 0
 		stuck_from = body.global_position
 
+var detour_dir := Vector3.ZERO
+var detour_time := 0.0
+
+## Можно ли пройти метр в этом направлении: под ногами земля, впереди нет стены.
+func _passable(here: Vector3, dir: Vector3) -> bool:
+	if game.night_raids.ground_at(here + dir * 1.2) == null:
+		return false
+	var space := body.get_world_3d().direct_space_state
+	for h in [1.0, 1.7]:
+		var q := PhysicsRayQueryParameters3D.create(here + Vector3.UP * h, here + Vector3.UP * h + dir * 1.1)
+		q.collision_mask = 1
+		q.exclude = [body.get_rid()]
+		var hit := space.intersect_ray(q)
+		if not hit.is_empty() and absf((hit.normal as Vector3).y) < .6:
+			return false
+	return true
+
 func _catch() -> void:
 	catches += 1
+	if is_instance_valid(game.achievements):
+		game.achievements.note("caught")
 	if visual != null:
 		visual.play_grab()
 	game.sound.scare("stinger", 0, .82)
@@ -558,21 +680,33 @@ func _room_of_player() -> String:
 		return "lighthouse"
 	return game.building_interiors.active
 
+func _can_follow_into(room: String) -> bool:
+	if room.is_empty() or room == "ship" or room == "radio":
+		return false
+	return not (room == "lighthouse" and game.lighthouse_on)
+
+func _door_of(room: String) -> Vector3:
+	return LI.OUTSIDE_DOOR if room == "lighthouse" else game.building_interiors.exit_at(room)
+
 func _try_follow_inside(delta: float) -> void:
 	var room := _room_of_player()
-	if room.is_empty() or room == "ship" or room == "radio":
+	if not _can_follow_into(room):
 		return
-	if room == "lighthouse" and game.lighthouse_on:
-		return
-	var door: Vector3 = LI.OUTSIDE_DOOR if room == "lighthouse" else game.building_interiors.exit_at(room)
+	var door := _door_of(room)
 	if _flat(body.global_position, door) > 3.0:
 		target = door
 		door_clock = 0
 		return
+	var before := door_clock
 	door_clock += delta
-	if door_clock == delta:
+	if before == 0.0:
 		game.sound.sfx("knock", -2, .7, game.player.global_position + Vector3(0, 1, 2))
-		game.notify("Дверь скрипнула. Оно входит. Спрячьтесь!", 4, 2)
+		game.notify("Оно ломится в дверь! Спрячьтесь!", 4, 2)
+		game.camera_shake = maxf(game.camera_shake, .25)
+	elif int(before / .7) != int(door_clock / .7):
+		# бьёт в дверь, пока не войдёт
+		game.sound.sfx("knock", 0, rng.randf_range(.55, .7), game.player.global_position + Vector3(0, 1, 2))
+		game.camera_shake = maxf(game.camera_shake, .18)
 	if door_clock > 2.2:
 		door_clock = 0
 		space = room

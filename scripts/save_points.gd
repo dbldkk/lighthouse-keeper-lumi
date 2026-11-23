@@ -58,6 +58,9 @@ func interact() -> bool:
 	return true
 
 func write(b: Dictionary) -> bool:
+	if not game.diff("saves"):
+		game.notify("Кошмар: страницы журнала слиплись от сырости. Сохранений нет.", 4, 1)
+		return false
 	if game.campaign.state.night and game.is_instance_valid_hunter_near():
 		game.notify("Не сейчас — оно рядом. Руки дрожат, перо не пишет.", 4, 1)
 		return false

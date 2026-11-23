@@ -75,6 +75,21 @@ func run() -> void:
 	check(h.interact() and h.hiding(), "Если укрытие ближе — прячемся")
 	h.leave_hiding()
 	h.spots.pop_back()
+	# подсказка «нужно топливо» — канистра на тропе поблёскивает
+	game.fuel_glint_time = 0
+	game.update_fuel_glint(.1)
+	check(game.fuel_glint == null or not game.fuel_glint.visible, "Без подсказки канистра не блестит")
+	for st in game.stations:
+		if st.station_id == "beacon":
+			game.inventory.fuel = 0
+			game.lighthouse_on = false
+			game.campaign.state.beacon_charge = 0
+			game.player.global_position = st.position
+			game.interaction_cooldown = 0
+			game.attempt_interaction(st)
+	game.update_fuel_glint(.3)
+	var can: Node3D = game.world.find_child("FuelCan", true, false)
+	check(game.fuel_glint_time > 0 and game.fuel_glint.visible and game.fuel_glint.global_position.distance_to(can.global_position) < 1.0, "После подсказки канистра на тропе мягко поблёскивает")
 	print("HIDING_SPOTS_CHECKS ", checks, " failures ", failures)
 	game.queue_free()
 	await frames(2)

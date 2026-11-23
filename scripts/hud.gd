@@ -28,6 +28,8 @@ var first_shift_button: Button
 var title_button: Button
 var settings_button: Button
 var tutorial_button: Button
+var difficulty_button: Button
+var records_button: Button
 var settings_panel: Control
 var backpack: Control
 var salvage: Control
@@ -296,6 +298,9 @@ func build_menu() -> void:
 	title_button = make_button(menu, "В главное меню", Vector2(66, 601), func(): game.return_to_title())
 	settings_button = make_button(menu, "Настройки", Vector2(402, 667), func(): settings_panel.open())
 	tutorial_button = make_button(menu, "Обучение", Vector2(202, 667), func(): game.replay_tutorial())
+	difficulty_button = make_button(menu, "", Vector2(476, 510), func(): cycle_difficulty())
+	difficulty_button.tooltip_text = "Обычная: сохранения у журнала. Кошмар: охотник быстрее, масла меньше, сохранений нет."
+	records_button = make_button(menu, "Рекорды", Vector2(476, 565), func(): game.achievements.open_records())
 	continue_button = make_button(menu, "Продолжить", Vector2(66, 601), func(): game.load_game())
 	save_button = make_button(menu, "Сохранить у журнала", Vector2(66, 667), func(): game.request_save())
 	exit_button = make_button(menu, "Выйти", Vector2(66, 733), func(): get_tree().quit())
@@ -303,7 +308,7 @@ func build_menu() -> void:
 	var focus := style(Color.TRANSPARENT, Color("c6a873"), 9)
 	focus.draw_center = false
 	focus.set_border_width_all(2)
-	for button in [start_button, first_shift_button, demo_button, title_button, settings_button, tutorial_button, continue_button, save_button, exit_button]:
+	for button in [start_button, first_shift_button, demo_button, title_button, settings_button, tutorial_button, continue_button, save_button, exit_button, difficulty_button, records_button]:
 		button.add_theme_stylebox_override("focus", focus)
 	text(menu, "Учебная демоверсия  •  Путь с острова\nВлад Людкевич · Костя Котельников\nАндрей Виговский · Артём Артамонов", Rect2(66, 809, 680, 69), 12, MUTED)
 	ending_stamp = text(menu, "", Rect2(785,778,555,48), 17, PAPER)
@@ -326,6 +331,9 @@ func show_menu(mode: String) -> void:
 	first_shift_button.visible = mode == "title"
 	settings_button.visible = mode in ["title","pause"]
 	tutorial_button.visible = mode == "title"
+	difficulty_button.visible = mode == "title"
+	records_button.visible = mode in ["title", "win", "loss"]
+	update_difficulty_button()
 	title_button.visible = in_episode and mode in ["pause","demo_loss"]
 	continue_button.visible = not in_episode and FileAccess.file_exists(game.save_path)
 	layout_menu_buttons(mode)
@@ -356,6 +364,10 @@ func show_menu(mode: String) -> void:
 		menu_subtitle.text = "Смена закончилась. Свет и укреплённая\nхижина помогут пережить следующую попытку."
 		start_button.text = "Повторить этот день" if game.campaign.enabled and FileAccess.file_exists(game.checkpoint_path) else "Попробовать снова"
 		if game.campaign.enabled:menu_subtitle.text = "Начало дня сохранено автоматически.\nПовторите только последнее дежурство."
+		if game.campaign.enabled and game.difficulty == "nightmare":
+			menu_title.text = "Кошмар\nзакончился"
+			menu_subtitle.text = "На «Кошмаре» сохранений нет.\nДошли до дня %d. Новая смена — с первого дня." % game.day
+			start_button.text = "Начать заново"
 	else:
 		menu_title.text = "Смотритель\nмаяка"
 		menu_subtitle.text = "Свет, записи и ложные голоса.\nСюжетная кампания на %d дней." % game.campaign.SHORT_DAYS
@@ -375,13 +387,31 @@ func layout_menu_buttons(mode: String) -> void:
 		settings_button.size = Vector2(128, 44)
 		tutorial_button.size = settings_button.size
 		exit_button.size = settings_button.size
+		difficulty_button.position = Vector2(476, 510)
+		difficulty_button.size = Vector2(270, 47)
+		records_button.position = Vector2(476, 565)
+		records_button.size = Vector2(270, 47)
 		return
+	records_button.position = Vector2(402, 601)
+	records_button.size = Vector2(310, 51)
 	start_button.position = Vector2(66, 535)
 	settings_button.position = Vector2(402, 535)
 	continue_button.position = Vector2(66, 601)
 	exit_button.position = Vector2(66, 733 if mode == "pause" else (667 if continue_button.visible or title_button.visible else 601))
 	for button in [start_button, settings_button, continue_button, exit_button]:
 		button.size = Vector2(310, 51)
+
+func update_difficulty_button() -> void:
+	if difficulty_button == null:
+		return
+	var d: String = game.preferences.difficulty
+	difficulty_button.text = "Сложность: " + game.DIFFICULTY.title(d)
+	difficulty_button.add_theme_color_override("font_color", Color("ff8a6a") if d == "nightmare" else PAPER)
+
+func cycle_difficulty() -> void:
+	game.preferences.difficulty = game.DIFFICULTY.next(game.preferences.difficulty)
+	game.preferences.save_preferences()
+	update_difficulty_button()
 
 ## Короткое затемнение экрана: действие выполняется в момент полной темноты.
 func fade_through(action: Callable, half: float = .22) -> void:
