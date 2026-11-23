@@ -28,6 +28,7 @@ const SCARES = preload("res://scripts/scares.gd")
 const DREAD = preload("res://scripts/dread.gd")
 const HUNTER = preload("res://scripts/hunter.gd")
 const LORE = preload("res://scripts/lore.gd")
+const SAVE_POINTS = preload("res://scripts/save_points.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -105,6 +106,7 @@ var scares: Node
 var dread: Node
 var hunter: Node3D
 var lore: Node3D
+var save_points: Node3D
 var escalation: Node
 ## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
 var last_safe_position := Vector3(3, 1.3, 4)
@@ -196,6 +198,11 @@ func _ready() -> void:
 	lore.name = "Lore"
 	lore.game = self
 	add_child(lore)
+	save_points = SAVE_POINTS.new()
+	save_points.name = "SavePoints"
+	save_points.game = self
+	add_child(save_points)
+	save_points.setup()
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -1256,7 +1263,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				survival.drink()
 		KEY_E:
 			if interaction_cooldown <= 0:
-				if not (hunter.hiding() and hunter.interact()) and not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not hunter.interact() and not lore.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
+				if not (hunter.hiding() and hunter.interact()) and not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not hunter.interact() and not lore.interact() and not save_points.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
 					player.play_gesture("interact")
 		KEY_SPACE:
 			if lighthouse_interior.active:
@@ -1291,7 +1298,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				hour = 17.0 if is_night() else 22.0
 				was_night = false
 		KEY_F9:
-			save_game()
+			request_save()
 		KEY_F10:
 			load_game()
 
@@ -1325,6 +1332,8 @@ func save_game(quiet: bool = false) -> bool:
 	state["homestead"] = homestead.save_data()
 	state["photos"] = photo.save_data()
 	state["lore"] = lore.save_data()
+	state["hunter"] = {"announced": hunter.announced, "catches": hunter.catches}
+	state["dread_found"] = dread.found.keys()
 	for station in stations:
 		if station.station_id == "wood":
 			state.wood_remaining = station.remaining
@@ -1342,6 +1351,17 @@ func save_game(quiet: bool = false) -> bool:
 		notify("Смена сохранена. F10 — загрузить.")
 		hud.continue_button.show()
 	return true
+
+## Ручное сохранение — только у журнала смены (хижина, маяк).
+func request_save() -> bool:
+	var book: Dictionary = save_points.near_book()
+	if book.is_empty():
+		notify("Сохраниться можно только у журнала смены: в хижине или на первом этаже маяка (E у журнала).", 5)
+		return false
+	return save_points.write(book)
+
+func is_instance_valid_hunter_near() -> bool:
+	return is_instance_valid(hunter) and hunter.active and hunter.state == "chase"
 
 func save_checkpoint() -> void:
 	if first_shift_demo.active() or not campaign.enabled or not checkpoints_enabled or loading_save:return
@@ -1373,7 +1393,7 @@ func load_game() -> bool:
 	if fishing.is_open():
 		return false
 	if not FileAccess.file_exists(save_path):
-		notify("Сохранения пока нет. F9 — сохранить смену.")
+		notify("Сохранения пока нет. Сделайте запись у журнала смены в хижине или на маяке.")
 		return false
 	var state = JSON.parse_string(FileAccess.get_file_as_string(save_path))
 	if not state is Dictionary or int(state.get("version", 0)) not in [1, 2, 3, 4, 5]:
@@ -1410,6 +1430,13 @@ func load_game() -> bool:
 	homestead.restore(state.get("homestead", {}))
 	photo.restore(state.get("photos", {}))
 	lore.restore(state.get("lore", {}))
+	hunter.leave_hiding()
+	var hunter_state: Dictionary = state.get("hunter", {})
+	hunter.announced = bool(hunter_state.get("announced", false))
+	hunter.catches = int(hunter_state.get("catches", 0))
+	dread.found.clear()
+	for story_id in state.get("dread_found", []):
+		dread.found[str(story_id)] = true
 	if int(state.get("version",0))<4:campaign.enabled = true
 	campaign.restore(state.get("campaign",{}) if int(state.get("version",0))>=4 else {},int(state.get("version",0))<4)
 	for entry in state.get("journal", []):

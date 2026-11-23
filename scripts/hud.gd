@@ -293,8 +293,8 @@ func build_menu() -> void:
 	demo_button.size.x = 380
 	title_button = make_button(menu, "В главное меню", Vector2(66, 601), func(): game.return_to_title())
 	settings_button = make_button(menu, "Настройки", Vector2(402, 667), func(): settings_panel.open())
-	continue_button = make_button(menu, "Продолжить сохранение", Vector2(66, 601), func(): game.load_game())
-	save_button = make_button(menu, "Сохранить смену", Vector2(66, 667), func(): game.save_game())
+	continue_button = make_button(menu, "Продолжить", Vector2(66, 601), func(): game.load_game())
+	save_button = make_button(menu, "Сохранить у журнала", Vector2(66, 667), func(): game.request_save())
 	exit_button = make_button(menu, "Выйти из игры", Vector2(66, 733), func(): get_tree().quit())
 	menu.move_child(continue_button, start_button.get_index() + 1)
 	var focus := style(Color.TRANSPARENT, Color("c6a873"), 9)
@@ -327,7 +327,7 @@ func show_menu(mode: String) -> void:
 	layout_menu_buttons(mode)
 	if mode == "pause":
 		menu_title.text = "Смена\nна паузе"
-		menu_subtitle.text = "Время и ночные события остановлены.\nEsc — продолжить." if in_episode else "Время и ночные события остановлены.\nEsc — продолжить. F9 — сохранить, F10 — загрузить."
+		menu_subtitle.text = "Время и ночные события остановлены.\nEsc — продолжить." if in_episode else "Время и ночные события остановлены.\nEsc — продолжить. Сохранение — у журнала смены (хижина, маяк), F10 — загрузить."
 		start_button.text = "Вернуться на остров"
 	elif mode == "demo_win":
 		menu_title.text = "Первая смена\nзавершена"
