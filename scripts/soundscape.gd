@@ -23,6 +23,11 @@ var step_pool: Array[AudioStreamPlayer] = []
 var step_index := 0
 var last_variant := {}
 var horror_samples := {}
+## Хоррор-набор (assets/audio/sfx и ambience): заменяет «детские» синтезированные бипы.
+## Если файла нет, остаётся старый процедурный звук — игра не ломается.
+var sfx_samples := {}
+const AMBIENCE := {"sea":"sea_loop", "rain":"rain_loop", "drone":"night_drone", "engine":"engine_loop", "burn":"fire_loop", "wind":"wind_loop"}
+var wind: AudioStreamPlayer
 var deep_drone: AudioStreamPlayer
 var heart: AudioStreamPlayer
 var heart_clock := 0.0
@@ -35,7 +40,7 @@ const END_THEME = preload("res://assets/audio/music/morning_signal.wav")
 
 func _ready() -> void:
 	sea = AudioStreamPlayer.new()
-	sea.stream = noise_stream(5.0, 0)
+	sea.stream = _ambience("sea", 5.0, 0)
 	sea.bus = "Environment"
 	sea.volume_db = -25
 	add_child(sea)
@@ -52,15 +57,17 @@ func _ready() -> void:
 	effect.bus = "Environment"
 	effect.volume_db = -20
 	add_child(effect)
-	rainfall = looping_player(3, 3.0)
-	drone = looping_player(4, 6.0)
+	rainfall = looping_player(3, 3.0, "rain")
+	drone = looping_player(4, 6.0, "drone")
+	wind = looping_player(3, 3.0, "wind")
+	_load_sfx()
 	radio = AudioStreamPlayer.new()
 	radio.stream = noise_stream(0.85, 5)
 	radio.bus = "Environment"
 	radio.volume_db = -23
 	add_child(radio)
-	engine = looping_player(6,4.0)
-	burn = looping_player(10, 1.2)
+	engine = looping_player(6, 4.0, "engine")
+	burn = looping_player(10, 1.2, "burn")
 	burn.volume_db = -60
 	cue_player = AudioStreamPlayer.new()
 	cue_player.bus = "Environment"
@@ -90,18 +97,76 @@ func repeat_track(source: AudioStreamWAV) -> AudioStreamWAV:
 	track.loop_mode = AudioStreamWAV.LOOP_FORWARD
 	return track
 
-func looping_player(kind: int, duration: float) -> AudioStreamPlayer:
+func looping_player(kind: int, duration: float, sample := "") -> AudioStreamPlayer:
 	var audio := AudioStreamPlayer.new()
-	audio.stream = noise_stream(duration, kind)
+	audio.stream = _ambience(sample, duration, kind)
 	audio.bus = "Environment"
 	audio.volume_db = -70
 	add_child(audio)
 	audio.play()
 	return audio
 
+## Зацикленный фон из assets/audio/ambience; без файла — старый процедурный шум.
+func _ambience(sample: String, duration: float, kind: int) -> AudioStream:
+	var path := "res://assets/audio/ambience/%s.wav" % AMBIENCE.get(sample, "-")
+	if sample != "" and ResourceLoader.exists(path):
+		var loop := (load(path) as AudioStreamWAV).duplicate() as AudioStreamWAV
+		loop.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		loop.loop_begin = 0
+		loop.loop_end = roundi(loop.get_length() * loop.mix_rate)
+		return loop
+	return noise_stream(duration, kind)
+
+func _load_sfx() -> void:
+	var dir := DirAccess.open("res://assets/audio/sfx")
+	if dir == null:
+		return
+	for file in dir.get_files():
+		var base := file.trim_suffix(".import").trim_suffix(".remap")
+		if base.ends_with(".wav") and not sfx_samples.has(base.get_basename()):
+			var path := "res://assets/audio/sfx/" + base
+			if ResourceLoader.exists(path):
+				sfx_samples[base.get_basename()] = load(path)
+
+## Короткий звук из хоррор-набора. Варианты name_1..name_N выбираются случайно.
+func sfx(name: String, volume_db := -10.0, pitch := 1.0, at: Variant = null) -> bool:
+	var options: Array = []
+	if sfx_samples.has(name):
+		options.append(sfx_samples[name])
+	for i in range(1, 6):
+		if sfx_samples.has("%s_%d" % [name, i]):
+			options.append(sfx_samples["%s_%d" % [name, i]])
+	if options.is_empty():
+		return false
+	var stream: AudioStream = options[randi() % options.size()]
+	if at is Vector3:
+		var p3 := AudioStreamPlayer3D.new()
+		p3.unit_size = 7
+		p3.max_distance = 55
+		p3.stream = stream
+		p3.volume_db = volume_db
+		p3.pitch_scale = pitch
+		p3.bus = "Environment"
+		add_child(p3)
+		p3.global_position = at
+		p3.finished.connect(p3.queue_free)
+		p3.play()
+		return true
+	var p2 := AudioStreamPlayer.new()
+	p2.stream = stream
+	p2.volume_db = volume_db
+	p2.pitch_scale = pitch
+	p2.bus = "Environment"
+	add_child(p2)
+	p2.finished.connect(p2.queue_free)
+	p2.play()
+	return true
+
 func set_ambience(night: float, rain: float) -> void:
-	rainfall.volume_db = lerpf(-70, -24, rain)
-	drone.volume_db = lerpf(-70, -34, night)
+	rainfall.volume_db = lerpf(-70, -22, rain)
+	drone.volume_db = lerpf(-70, -26, night)
+	if is_instance_valid(wind):
+		wind.volume_db = lerpf(-30, -21, maxf(night, rain))
 
 func set_engine(distance: float, running: bool) -> void:
 	engine.volume_db = lerpf(-70,-26,clampf(1-distance/18.0,0,1)) if running else -70.0
@@ -111,6 +176,8 @@ func set_story_silence(silent: bool) -> void:
 	if silent:
 		rainfall.volume_db = -65
 		drone.volume_db = -70
+		if is_instance_valid(wind):
+			wind.volume_db = -70
 
 func noise_stream(duration: float, kind: int) -> AudioStreamWAV:
 	var rate := 22050
@@ -260,6 +327,8 @@ func _setup_muffle() -> void:
 ## Одиночный звук ужаса. Для 3D передайте точку, иначе звучит «в голове».
 func scare(kind: String, volume_db := -6.0, pitch := 1.0, at: Variant = null) -> void:
 	var stream: AudioStream = horror_samples.get(kind)
+	if kind in ["stinger", "static"] and sfx_samples.has(kind):
+		stream = sfx_samples[kind]
 	if stream == null:
 		cue("alarm")
 		return
@@ -305,6 +374,9 @@ func set_tension(tension: float, heart_bpm: float, delta: float) -> void:
 		heart.play()
 
 func interact(kind: String = "") -> void:
+	var name: String = {"wood":"interact_wood", "beacon":"interact_metal", "cook":"interact_cook", "fish":"interact_fish", "paper":"interact_paper"}.get(kind, "interact")
+	if sfx(name, -12.0, randf_range(.93, 1.05)):
+		return
 	effect.pitch_scale = {"wood": 0.7, "beacon": 0.65, "cook": 1.15, "fish": 1.3}.get(kind, 1.0)
 	effect.play()
 
@@ -317,6 +389,8 @@ func set_burn(active: bool) -> void:
 func cue(kind: String) -> void:
 	if kind in ["hit", "tell", "splash", "flicker"]:
 		scare(kind, {"hit":-4.0, "tell":-8.0, "splash":-6.0, "flicker":-8.0}[kind], randf_range(.94, 1.06))
+		return
+	if sfx(kind, {"alarm":-9.0, "chime":-11.0, "dispel":-10.0}.get(kind, -10.0), randf_range(.95, 1.04) if kind == "dispel" else 1.0):
 		return
 	var type: int = {"alarm":11,"chime":12,"dispel":13}.get(kind,12)
 	if not cue_cache.has(type):cue_cache[type]=noise_stream({11:1.0,12:.62,13:.55}[type],type)
@@ -334,9 +408,16 @@ func cue(kind: String) -> void:
 	cue_player.play()
 
 func radio_signal() -> void:
+	if sfx("radio_signal", -14):
+		return
 	radio.play()
 
 func horror_cue(kind: String, at: Vector3) -> void:
+	if kind == "steps" and not step_samples.get("grass", []).is_empty():
+		phantom_step(at)
+		return
+	if sfx({"knock":"knock_far", "whisper":"whisper", "radio":"static"}.get(kind, kind), -10.0, randf_range(.9, 1.02), at):
+		return
 	var type: int = {"knock":7,"whisper":8,"radio":9,"steps":1}.get(kind,8)
 	if not horror_cache.has(type):horror_cache[type]=noise_stream(.75 if type!=1 else .18,type)
 	var cue := AudioStreamPlayer3D.new()
@@ -353,7 +434,7 @@ func horror_cue(kind: String, at: Vector3) -> void:
 func _exit_tree() -> void:
 	if muffle != null:
 		muffle.cutoff_hz = 20000
-	for audio_player in [sea, steps, effect, rainfall, drone, radio, engine, music, burn, cue_player, deep_drone, heart]:
+	for audio_player in [sea, steps, effect, rainfall, drone, radio, engine, music, burn, cue_player, deep_drone, heart, wind]:
 		if is_instance_valid(audio_player):
 			audio_player.stop()
 			audio_player.stream = null

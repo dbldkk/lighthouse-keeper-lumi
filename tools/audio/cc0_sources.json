@@ -1,0 +1,306 @@
+{
+ "wind": [
+  {
+   "cache": "wind_1.mp3",
+   "freesound_id": 117513,
+   "author": "klangfabrik",
+   "title": "winter wind 01c.aiff by klangfabrik",
+   "url": "https://freesound.org/people/klangfabrik/sounds/117513/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "wind_2.mp3",
+   "freesound_id": 69512,
+   "author": "audible-edge",
+   "title": "Winter wind whistling through window.mp3 by audible-edge",
+   "url": "https://freesound.org/people/audible-edge/sounds/69512/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "rain": [
+  {
+   "cache": "rain_1.mp3",
+   "freesound_id": 56311,
+   "author": "Q.K.",
+   "title": "Rain_06.wav by Q.K.",
+   "url": "https://freesound.org/people/Q.K./sounds/56311/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "fire": [
+  {
+   "cache": "fire_1.mp3",
+   "freesound_id": 40699,
+   "author": "Spandau",
+   "title": "campfire.wav by Spandau",
+   "url": "https://freesound.org/people/Spandau/sounds/40699/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "creak": [
+  {
+   "cache": "creak_1.mp3",
+   "freesound_id": 377552,
+   "author": "Mafon2",
+   "title": "Wooden Creak by Mafon2",
+   "url": "https://freesound.org/people/Mafon2/sounds/377552/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "creak_2.mp3",
+   "freesound_id": 195193,
+   "author": "PimFeijen",
+   "title": "LargeWoodenShip.mp3 by PimFeijen",
+   "url": "https://freesound.org/people/PimFeijen/sounds/195193/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "creak_3.mp3",
+   "freesound_id": 216878,
+   "author": "CastIronCarousel",
+   "title": "Squeaky door opened quickly.wav by CastIronCarousel",
+   "url": "https://freesound.org/people/CastIronCarousel/sounds/216878/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "metal_groan": [
+  {
+   "cache": "metal_groan_1.mp3",
+   "freesound_id": 161222,
+   "author": "lolamadeus",
+   "title": "Heatpress squeaking and creaking.wav by lolamadeus",
+   "url": "https://freesound.org/people/lolamadeus/sounds/161222/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "metal_groan_2.mp3",
+   "freesound_id": 429130,
+   "author": "leonelmail",
+   "title": "Spring Loaded Metal Door Creak Open Close 02 by leonelmail",
+   "url": "https://freesound.org/people/leonelmail/sounds/429130/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "foghorn": [
+  {
+   "cache": "foghorn_1.mp3",
+   "freesound_id": 328541,
+   "author": "Vendarro",
+   "title": "Deep Horn by Vendarro",
+   "url": "https://freesound.org/people/Vendarro/sounds/328541/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "bell": [
+  {
+   "cache": "bell_1.mp3",
+   "freesound_id": 240586,
+   "author": "blaukreuz",
+   "title": "140809_FrybgWb_BellTower_Midnight_F.wav by blaukreuz",
+   "url": "https://freesound.org/people/blaukreuz/sounds/240586/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "bell_2.mp3",
+   "freesound_id": 486559,
+   "author": "kb7clx",
+   "title": "St. Benedict's Abbey bells Atchison KS close 9-28-2019.wav by kb7clx",
+   "url": "https://freesound.org/people/kb7clx/sounds/486559/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "zap": [
+  {
+   "cache": "zap_1.mp3",
+   "freesound_id": 512471,
+   "author": "michael_grinnell",
+   "title": "Electric zap.wav by michael_grinnell",
+   "url": "https://freesound.org/people/michael_grinnell/sounds/512471/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "zap_2.mp3",
+   "freesound_id": 189630,
+   "author": "elliott.klein",
+   "title": "Spark by elliott.klein",
+   "url": "https://freesound.org/people/elliott.klein/sounds/189630/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "hammer": [
+  {
+   "cache": "hammer_1.mp3",
+   "freesound_id": 337816,
+   "author": "blukotek",
+   "title": "hammer v1.wav by blukotek",
+   "url": "https://freesound.org/people/blukotek/sounds/337816/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "hammer_2.mp3",
+   "freesound_id": 202231,
+   "author": "deraj",
+   "title": "hammering or knocking sound by deraj",
+   "url": "https://freesound.org/people/deraj/sounds/202231/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "pick": [
+  {
+   "cache": "pick_1.mp3",
+   "freesound_id": 431019,
+   "author": "CamoMano",
+   "title": "Stone hit by CamoMano",
+   "url": "https://freesound.org/people/CamoMano/sounds/431019/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "pick_2.mp3",
+   "freesound_id": 457585,
+   "author": "MiraclesHappen",
+   "title": "Mining with Pick Axe in a group by MiraclesHappen",
+   "url": "https://freesound.org/people/MiraclesHappen/sounds/457585/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "sea": [
+  {
+   "cache": "sea_1.mp3",
+   "freesound_id": 412308,
+   "author": "straget",
+   "title": "Big waves hit land.wav by straget",
+   "url": "https://freesound.org/people/straget/sounds/412308/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "sea_2.mp3",
+   "freesound_id": 339517,
+   "author": "pulswelle",
+   "title": "Waves at Baltic Sea shore.wav by pulswelle",
+   "url": "https://freesound.org/people/pulswelle/sounds/339517/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "knock": [
+  {
+   "cache": "knock_1.mp3",
+   "freesound_id": 267931,
+   "author": "anagar",
+   "title": "Knock_the_door.wav by anagar",
+   "url": "https://freesound.org/people/anagar/sounds/267931/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "knock_2.mp3",
+   "freesound_id": 256513,
+   "author": "HunteR4708",
+   "title": "Knock on the door by HunteR4708",
+   "url": "https://freesound.org/people/HunteR4708/sounds/256513/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "engine": [
+  {
+   "cache": "engine_1.mp3",
+   "freesound_id": 128160,
+   "author": "ibirdfilm",
+   "title": "Diesel Truck Idling Front.wav by ibirdfilm",
+   "url": "https://freesound.org/people/ibirdfilm/sounds/128160/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "static": [
+  {
+   "cache": "static_1.mp3",
+   "freesound_id": 17804,
+   "author": "Jace",
+   "title": "Static.wav by Jace",
+   "url": "https://freesound.org/people/Jace/sounds/17804/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "static_2.mp3",
+   "freesound_id": 50750,
+   "author": "RutgerMuller",
+   "title": "Radio Noise.wav by RutgerMuller",
+   "url": "https://freesound.org/people/RutgerMuller/sounds/50750/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "splash": [
+  {
+   "cache": "splash_1.mp3",
+   "freesound_id": 9508,
+   "author": "petenice",
+   "title": "SPLASH.wav by petenice",
+   "url": "https://freesound.org/people/petenice/sounds/9508/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "splash_2.mp3",
+   "freesound_id": 173930,
+   "author": "JohnsonBrandEditing",
+   "title": "Water Pour by JohnsonBrandEditing",
+   "url": "https://freesound.org/people/JohnsonBrandEditing/sounds/173930/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "pipe": [
+  {
+   "cache": "pipe_1.mp3",
+   "freesound_id": 807910,
+   "author": "tomwilkinson",
+   "title": "Aircon groan by tomwilkinson",
+   "url": "https://freesound.org/people/tomwilkinson/sounds/807910/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "sputter": [
+  {
+   "cache": "sputter_1.mp3",
+   "freesound_id": 481663,
+   "author": "craigsmith",
+   "title": "R03-12-Antique Auto Sputter and Backfire.wav by craigsmith",
+   "url": "https://freesound.org/people/craigsmith/sounds/481663/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  {
+   "cache": "sputter_2.mp3",
+   "freesound_id": 437744,
+   "author": "craigsmith",
+   "title": "G02-20-Biplane Engine Sputters.wav by craigsmith",
+   "url": "https://freesound.org/people/craigsmith/sounds/437744/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "page": [
+  {
+   "cache": "page_1.mp3",
+   "freesound_id": 320913,
+   "author": "mickdow",
+   "title": "Paper Flutter .wav by mickdow",
+   "url": "https://freesound.org/people/mickdow/sounds/320913/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "sizzle": [
+  {
+   "cache": "sizzle_1.mp3",
+   "freesound_id": 382313,
+   "author": "bottles",
+   "title": "Sizzle / Acid Burn by bottles",
+   "url": "https://freesound.org/people/bottles/sounds/382313/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ],
+ "thunder": [
+  {
+   "cache": "thunder_1.mp3",
+   "freesound_id": 273805,
+   "author": "BrainClaim",
+   "title": "Bass Rumble In The Distance by BrainClaim",
+   "url": "https://freesound.org/people/BrainClaim/sounds/273805/",
+   "license": "CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)"
+  }
+ ]
+}
