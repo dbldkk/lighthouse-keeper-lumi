@@ -129,6 +129,14 @@ func hunter_shots() -> void:
 	await create_timer(.3).timeout
 	quiet()
 	await shot("02_hunter_lantern_catch")
+	if OS.get_environment("UI_TAG") == "cover":
+		game.hud.visible = false
+		game.target_zoom = 12
+		game.camera_zoom = 12
+		game.camera_focus = (mid + me) * .5 + Vector3.UP
+		await create_timer(.3).timeout
+		await shot("cover_raw")
+		game.hud.visible = true
 	var s := shore_point()
 	var cam_dir := Vector3(29, 0, 40).normalized()
 	game.player.lantern_on = false
