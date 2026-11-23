@@ -546,6 +546,8 @@ func _shutter() -> void:
 	var nearest: Vector3 = spots[0]
 	var at: Vector3 = nearest if nearest.distance_to(p) < 30 else p + _facing() * -6.0
 	game.sound.sfx("knock", -4, rng.randf_range(.8, .95), at)
+	if is_instance_valid(game.hunter):
+		game.hunter.noise(at, .55)
 	await get_tree().create_timer(.35).timeout
 	if is_instance_valid(game):
 		game.sound.sfx("knock", -7, rng.randf_range(.75, .9), at)

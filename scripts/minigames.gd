@@ -353,6 +353,8 @@ func penalty(why: String) -> void:
 			game.sound.scare("static", -8, .85)
 	if is_instance_valid(game.scares):
 		game.scares.jolt(.45)
+	if is_instance_valid(game.hunter) and why != "static":
+		game.hunter.noise(game.map_player_position(), .8)
 	var raids: Node = game.night_raids
 	if is_instance_valid(raids) and raids.eligible() and why != "static" and randf() < BAL.MINIGAME_NOISE_ATTRACT_CHANCE:
 		raids.spawn_phantom()

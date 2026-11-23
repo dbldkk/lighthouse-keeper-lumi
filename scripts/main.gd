@@ -26,6 +26,7 @@ const PHOTO_ALBUM = preload("res://scripts/photo_album.gd")
 const BAL = preload("res://scripts/balance.gd")
 const SCARES = preload("res://scripts/scares.gd")
 const DREAD = preload("res://scripts/dread.gd")
+const HUNTER = preload("res://scripts/hunter.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -101,6 +102,8 @@ var camera_shake := 0.0
 ## Ужас: режиссёр пугающих моментов и напряжения.
 var scares: Node
 var dread: Node
+var hunter: Node3D
+var escalation: Node
 ## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
 var last_safe_position := Vector3(3, 1.3, 4)
 var safe_sample_clock := 0.0
@@ -183,6 +186,10 @@ func _ready() -> void:
 	dread.name = "Dread"
 	dread.game = self
 	add_child(dread)
+	hunter = HUNTER.new()
+	hunter.name = "Hunter"
+	hunter.game = self
+	add_child(hunter)
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -210,6 +217,7 @@ func _ready() -> void:
 	viewer.name = "EasterViewer"
 	hud.root.add_child(viewer)
 	viewer.setup(self)
+	hunter.setup()
 	camera.position = camera_focus + Vector3(29, 34, 40)
 	camera.look_at(camera_focus)
 	camera.size = camera_zoom
@@ -305,7 +313,7 @@ func start_shift() -> void:
 	if playing and paused and not finished:
 		paused = false
 		journal_open = false
-		player.enabled = not fishing.is_open()
+		player.enabled = not fishing.is_open() and not hunter.hiding()
 		hud.show_game()
 		return
 	fishing.close()
@@ -358,6 +366,8 @@ func start_shift() -> void:
 		scares.reset()
 	if is_instance_valid(dread):
 		dread.reset()
+	if is_instance_valid(hunter):
+		hunter.reset()
 	playing = true
 	paused = false
 	finished = false
@@ -1074,7 +1084,7 @@ func turn_journal_page(direction: int) -> void:
 func close_journal() -> void:
 	journal_open = false
 	paused = false
-	player.enabled = not fishing.is_open()
+	player.enabled = not fishing.is_open() and not hunter.hiding()
 	hud.show_game()
 
 func finish_shift(won: bool) -> void:
@@ -1194,7 +1204,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.physical_keycode == KEY_ESCAPE and playing and not finished:
 		paused = not paused
-		player.enabled = not paused
+		player.enabled = not paused and not hunter.hiding()
 		if paused:
 			hud.show_menu("pause")
 		else:
@@ -1223,7 +1233,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				survival.drink()
 		KEY_E:
 			if interaction_cooldown <= 0:
-				if not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
+				if not (hunter.hiding() and hunter.interact()) and not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not hunter.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
 					player.play_gesture("interact")
 		KEY_SPACE:
 			if lighthouse_interior.active:

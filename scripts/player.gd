@@ -16,6 +16,8 @@ var indoors := false
 ## Скорость в помещении; на лестнице маяка выше, и там разрешён бег.
 var indoor_speed := 2.35
 var indoor_running := false
+## Бег слышно: охотник идёт на шум.
+var is_running := false
 ## Множитель скорости от состояния смотрителя (сильный голод замедляет).
 var speed_scale := 1.0
 var stamina := 100.0
@@ -121,6 +123,7 @@ func _physics_process(delta: float) -> void:
 		velocity.y = JUMP_SPEED
 		motion.play("jump", .055, true)
 	var running := (not indoors or indoor_running) and grounded and not launched and landing_time <= 0 and Input.is_physical_key_pressed(KEY_SHIFT) and stamina > 1 and direction.length_squared() > .01
+	is_running = running
 	var speed := ((indoor_speed * 1.6 if running else indoor_speed) if indoors else (sprint_speed if running else walk_speed))
 	if running:
 		stamina = maxf(0, stamina-18.0*delta)
