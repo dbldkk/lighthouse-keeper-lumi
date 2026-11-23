@@ -9,6 +9,9 @@ var warmth := 85.0
 var stove_time := 0.0
 var meal_warmth_time := 0.0
 var wood_bonus_day := 0
+## Множители восстановления выносливости: тепло и голод. Итог = произведение, без накопления.
+var warmth_mult := 1.0
+var hunger_mult := 1.0
 
 func reset() -> void:
 	water = 0
@@ -16,6 +19,8 @@ func reset() -> void:
 	stove_time = 0.0
 	meal_warmth_time = 0.0
 	wood_bonus_day = 0
+	warmth_mult = 1.0
+	hunger_mult = 1.0
 	game.player.stamina_recovery_scale = 1.0
 
 func save_state() -> Dictionary:
@@ -36,7 +41,8 @@ func advance(delta: float) -> void:
 	stove_time = maxf(0,stove_time-delta)
 	meal_warmth_time = maxf(0,meal_warmth_time-delta)
 	if not exposure_enabled():
-		game.player.stamina_recovery_scale = 1.0
+		warmth_mult = 1.0
+		game.player.stamina_recovery_scale = warmth_mult * hunger_mult
 		return
 	var at_home: bool = game.building_interiors.active=="cabin"
 	var sheltered: bool = not game.building_interiors.active.is_empty() or game.lighthouse_interior.active or game.building_interiors.warehouse_open
@@ -51,7 +57,8 @@ func advance(delta: float) -> void:
 	if meal_warmth_time>0:
 		change += .72
 	warmth = clampf(warmth+change*delta,0,100)
-	game.player.stamina_recovery_scale = lerpf(.62,1.0,smoothstep(10,48,warmth))
+	warmth_mult = lerpf(.62,1.0,smoothstep(10,48,warmth))
+	game.player.stamina_recovery_scale = warmth_mult * hunger_mult
 
 func can_refill() -> bool:
 	return game.expedition.state.pump and game.near_station("pump")!=null
