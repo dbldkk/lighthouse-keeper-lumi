@@ -84,6 +84,7 @@ func _ready() -> void:
 	var atmosphere_material := ShaderMaterial.new()
 	atmosphere_material.shader = load("res://shaders/screen_atmosphere.gdshader")
 	atmosphere.material = atmosphere_material
+	game.preferences.apply_screen.call_deferred()
 	root.add_child(atmosphere)
 	build_game_ui()
 	build_menu()
@@ -460,14 +461,15 @@ func refresh() -> void:
 	var minutes := int(game.hour * 60) % 1440
 	clock_label.text = "ДЕНЬ %02d    %02d:%02d" % [game.day, minutes / 60, minutes % 60]
 	status_label.text = ("НОЧЬ · ДОЖДЬ" if game.coastal_life.rain_strength > 0.2 else "НОЧЬ · ДЕРЖИТЕСЬ СВЕТА") if game.is_night() else game.coastal_life.weather_label()
-	movement_help.text = "WASD ходить  ·  Shift бег  ·  E действие  ·  F фонарь  ·  ПКМ / C луч  ·  X ракета  ·  R еда  ·  M карта  ·  J журнал" + ("  ·  P фото  ·  L альбом" if game.photo.has_camera else "") + "  ·  Esc меню"
+	var k: Callable = game.preferences.key_name
+	movement_help.text = "WASD ходить  ·  %s бег  ·  %s действие  ·  %s фонарь  ·  ПКМ / C луч  ·  %s ракета  ·  %s еда  ·  %s карта  ·  %s журнал" % [k.call("sprint"), k.call("interact"), k.call("lantern"), k.call("flare"), k.call("eat"), k.call("map"), k.call("journal")] + ("  ·  P фото  ·  L альбом" if game.photo.has_camera else "") + "  ·  Esc меню"
 	if game.lighthouse_interior.active:
 		status_label.text = "МАЯК · ВНУТРИ"
-		movement_help.text = "WASD ходить по лестнице  ·  E действие  ·  F фонарь  ·  R еда  ·  M карта  ·  J журнал  ·  Esc меню"
+		movement_help.text = "WASD ходить по лестнице  ·  %s действие  ·  %s фонарь  ·  %s еда  ·  %s карта  ·  %s журнал  ·  Esc меню" % [k.call("interact"), k.call("lantern"), k.call("eat"), k.call("map"), k.call("journal")]
 	var room_title: String = game.building_interiors.title(game.player.position)
 	if not room_title.is_empty():
 		status_label.text = room_title
-		movement_help.text = "WASD ходить  ·  E действие  ·  F фонарь  ·  R еда  ·  M карта  ·  J журнал  ·  Esc меню"
+		movement_help.text = "WASD ходить  ·  %s действие  ·  %s фонарь  ·  %s еда  ·  %s карта  ·  %s журнал  ·  Esc меню" % [k.call("interact"), k.call("lantern"), k.call("eat"), k.call("map"), k.call("journal")]
 	task_label.text = game.expedition.tasks()
 	# Журнал растёт вниз по содержимому, но не наезжает на нижние панели.
 	var lines: int = maxi(1, task_label.get_line_count())

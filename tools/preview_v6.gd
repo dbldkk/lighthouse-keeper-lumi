@@ -92,7 +92,19 @@ func tutorial_shots() -> void:
 	game.tutorial.stop()
 
 func settings_shots() -> void:
-	pass
+	game.return_to_title()
+	await create_timer(.5).timeout
+	var panel = game.hud.settings_panel
+	panel.open()
+	panel.tabs.current_tab = 0
+	await shot("6_settings_video")
+	panel.tabs.current_tab = 1
+	await shot("7_settings_audio")
+	panel.tabs.current_tab = 2
+	panel._start_capture("flare")
+	await shot("8_settings_controls")
+	panel.capture_key(KEY_ESCAPE)
+	panel.close()
 
 func hunter_shots() -> void:
 	pass

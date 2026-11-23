@@ -551,7 +551,7 @@ func update_camera(delta: float) -> void:
 	camera_zoom = lerpf(camera_zoom, zoom, 1.0 - exp(-delta * 3))
 	camera.position = camera_focus + offset
 	camera.look_at(camera_focus)
-	camera.size = camera_zoom
+	camera.size = camera_zoom * preferences.view_scale()
 	if camera_shake > 0:
 		camera_shake = maxf(0, camera_shake - delta * 1.8)
 		camera.h_offset = sin(Time.get_ticks_msec() * 0.04) * camera_shake * 0.12
@@ -707,6 +707,7 @@ func update_atmosphere() -> void:
 	if event_fog > 0:
 		env.fog_density += .012 * event_fog
 		env.fog_light_color = env.fog_light_color.lerp(Color("4d5a66"), .5 * event_fog)
+	env.fog_density *= preferences.fog_scale()
 
 func is_night() -> bool:
 	return hour >= 20 or hour < 6
@@ -1156,6 +1157,7 @@ func finish_shift(won: bool) -> void:
 	hud.show_menu(screen)
 
 func _input(event: InputEvent) -> void:
+	event = preferences.translated_event(event)
 	if is_instance_valid(minigames) and minigames.visible and (event is InputEventKey or event is InputEventMouseButton):
 		minigames.handle(event)
 		get_viewport().set_input_as_handled()
@@ -1225,6 +1227,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
+	event = preferences.translated_event(event)
 	if hud.settings_panel.visible or hud.backpack.visible or hud.salvage.visible or hud.fieldwork.visible or hud.tuner.visible or fishing.is_open() or expedition.sailing:
 		return
 	if event is InputEventMouseButton and event.pressed and playing:

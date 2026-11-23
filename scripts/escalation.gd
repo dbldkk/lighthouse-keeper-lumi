@@ -146,7 +146,7 @@ func _apply_visuals(delta: float) -> void:
 			sun.light_color = sun.light_color.lerp(Color("cfe0ff"), k)
 		env.ambient_light_energy += .5 * k
 	if fog_amount > 0:
-		env.fog_density += .014 * fog_amount
+		env.fog_density += .014 * fog_amount * game.preferences.fog_scale()
 		env.fog_light_color = env.fog_light_color.lerp(Color("3a4650"), .45 * fog_amount)
 	if storm and is_instance_valid(game.sound.wind):
 		game.sound.wind.volume_db += 7.0

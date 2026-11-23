@@ -330,7 +330,7 @@ func close() -> void:
 func _place_camera() -> void:
 	var cam: Camera3D = game.camera
 	var head: Vector3 = game.player.global_position + Vector3(0, 1.58, 0)
-	cam.fov = fov
+	cam.fov = clampf(fov * game.preferences.view_scale(), 15, 100)
 	if selfie:
 		var dir := Vector3(sin(yaw + orbit), 0, cos(yaw + orbit))
 		cam.global_position = head + dir * 1.9 + Vector3(0, .15 + pitch * 1.5, 0)
@@ -347,7 +347,10 @@ func handle(event: InputEvent) -> bool:
 	if not active:
 		return false
 	if event is InputEventMouseMotion:
-		var motion: Vector2 = event.relative * .0035
+		var prefs = game.preferences
+		var motion: Vector2 = event.relative * .0035 * float(prefs.mouse_sensitivity)
+		if prefs.invert_y:
+			motion.y = -motion.y
 		if selfie:
 			orbit = clampf(orbit - motion.x, -1.3, 1.3)
 			pitch = clampf(pitch - motion.y, -.4, .6)

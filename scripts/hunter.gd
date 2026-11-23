@@ -588,7 +588,7 @@ func _tick_breath(delta: float) -> void:
 	if not hiding():
 		breath = minf(BREATH_MAX, breath + delta)
 		return
-	holding = Input.is_physical_key_pressed(KEY_SPACE) or holding_forced
+	holding = Input.is_physical_key_pressed(breath_key) or holding_forced
 	if holding and breath > 0:
 		breath = maxf(0, breath - delta)
 		game.sanity = maxf(0, game.sanity - BREATH_SANITY * delta)
@@ -598,6 +598,7 @@ func _tick_breath(delta: float) -> void:
 		breath = minf(BREATH_MAX, breath + delta * .45)
 
 var holding_forced := false
+var breath_key := KEY_SPACE          ## переназначается в настройках
 
 func _gasp() -> void:
 	gasp_cooldown = 3.0

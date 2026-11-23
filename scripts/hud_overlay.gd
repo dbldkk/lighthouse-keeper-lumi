@@ -336,6 +336,12 @@ func _draw_radio() -> void:
 	var data: Dictionary = game.radio.subtitle()
 	if data.is_empty():
 		return
+	# Субтитры выключены: остаётся только подсказка к действию (если есть).
+	if not game.preferences.subtitles:
+		if String(data.hint).is_empty():
+			return
+		data = data.duplicate()
+		data.text = "…"
 	var view := get_viewport_rect().size
 	var width := 600.0
 	var lines := _wrap(String(data.text), width - 40, 18)

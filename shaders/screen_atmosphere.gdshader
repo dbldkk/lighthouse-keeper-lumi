@@ -13,7 +13,11 @@ uniform float dread = 0.0;                // 0 — обычная картинк
 uniform float mist = 0.0;                 // экранный туман-клочья
 uniform float glitch = 0.0;               // сбой кадра (0–1, короткие импульсы)
 uniform float menu = 0.0;                 // титульный экран
-uniform float flare = 0.0;                // сигнальная ракета: красный свет не выцветает
+uniform float flare = 0.0;
+// Настройки игрока: яркость, гамма, сила плёночного зерна (пресет качества).
+uniform float brightness = 1.0;
+uniform float gamma = 1.0;
+uniform float grain_scale = 1.0;                // сигнальная ракета: красный свет не выцветает
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -82,6 +86,7 @@ void fragment() {
 	// Плёночное зерно и редкие царапины.
 	float grain = hash(floor(FRAGCOORD.xy) + floor(TIME * 24.0) * 1.7) - 0.5;
 	float scratch = step(0.9985, hash(vec2(floor(FRAGCOORD.x * 0.5), floor(TIME * 12.0)))) * dread * 0.08;
-	graded += grain * (0.004 + dread * 0.035 + tension * 0.03) + scratch;
+	graded = pow(max(graded, vec3(0.0)), vec3(1.0 / max(gamma, 0.1))) * brightness;
+	graded += (grain * (0.004 + dread * 0.035 + tension * 0.03) + scratch) * grain_scale;
 	COLOR = vec4(clamp(graded, vec3(0.0), vec3(1.0)), 1.0);
 }
