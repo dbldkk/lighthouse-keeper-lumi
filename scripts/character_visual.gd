@@ -10,6 +10,8 @@ static func install(container: Node3D, kind: String) -> Node3D:
 	var existing := container.get_node_or_null("RiggedModel") as Node3D
 	var path: String = MODELS.get(kind, MODELS.shadow)
 	if existing != null and existing.scene_file_path == path:
+		if kind == "keeper":
+			apply_keeper_vertex_colors(existing)
 		return existing
 	if not ResourceLoader.exists(path):
 		return null
@@ -25,6 +27,17 @@ static func install(container: Node3D, kind: String) -> Node3D:
 	var model := packed.instantiate() as Node3D
 	model.name = "RiggedModel"
 	container.add_child(model)
+	if kind == "keeper":
+		apply_keeper_vertex_colors(model)
 	if container.owner != null:
 		model.owner = container.owner
 	return model
+
+static func apply_keeper_vertex_colors(model: Node3D) -> void:
+	var body := model.find_child("Body", true, false) as MeshInstance3D
+	if body == null or body.mesh == null:
+		return
+	for index in body.mesh.get_surface_count():
+		var material := body.mesh.surface_get_material(index) as BaseMaterial3D
+		if material != null and body.mesh.surface_get_format(index) & Mesh.ARRAY_FORMAT_COLOR:
+			material.vertex_color_use_as_albedo = true

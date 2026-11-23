@@ -64,6 +64,10 @@ func run() -> void:
 	await place(Vector3(0,1.15,2))
 	var player = game.player
 	check(player.motion.skeleton != null and player.motion.current=="idle","Keeper idles using the imported Blender rig")
+	var keeper_body := player.get_node("Visual/RiggedModel").find_child("Body", true, false) as MeshInstance3D
+	var keeper_material := keeper_body.mesh.surface_get_material(0) as BaseMaterial3D
+	check(keeper_material.vertex_color_use_as_albedo and keeper_body.mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_COLOR,
+		"Keeper uses the painted mesh colors in Godot")
 	check(is_instance_valid(player.lantern_socket) and player.get_node("HandLantern").global_position.distance_to(player.lantern_socket.global_position)<.12,"Godot light follows the animated lantern bone")
 	input(KEY_F,true)
 	await frames(3)
