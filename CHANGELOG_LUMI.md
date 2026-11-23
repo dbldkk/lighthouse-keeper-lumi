@@ -296,6 +296,14 @@ door_wait (ждёт у двери). Исходник — `assets/source_blender/
    только во тьме — фонарь, маяк или помещение останавливают урон сразу. Про тьму сказано в обучении
    (шаг «фонарь»). Тест `night_health_test`: при свете и без нападений здоровье ночью не падает.
 
+### Сборка для macOS
+
+Пресет экспорта «macOS» (`export_presets.cfg`): универсальный бинарник arm64 + x86_64, OpenGL
+Compatibility, bundle id `com.dbldkk.lighthousekeeper`, имя приложения «Смотритель маяка»
+(`config/name.macos` — только для Mac, сохранения Windows не затронуты), ad-hoc подпись встроенным
+подписчиком Godot, без нотаризации. Для arm64 включён импорт ETC2/ASTC (VRAM-сжатых текстур в проекте нет,
+сборку Windows это не меняет). Архив `LighthouseKeeper-Lumi-macOS.zip` + `docs/КАК ЗАПУСТИТЬ НА MAC.txt`.
+
 ### Баланс (прогон ботами `tools/playtest_sim.gd`)
 
 См. `docs/PLAYTEST_V13.md`. Главное изменение: укус охотника 45 → 35 и «передышка» 25 с после
