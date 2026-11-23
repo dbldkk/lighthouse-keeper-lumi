@@ -1,11 +1,12 @@
 extends Node
 ## Ночная оборона: волны теней идут гасить маяк и ломать баррикаду хижины.
 ## Отсидеться в свете больше нельзя — смотритель сам решает, что защищать.
+const BAL = preload("res://scripts/balance.gd")
 const GENERATOR := Vector3(-6.4, 1, -5.5)
 const BARRICADE_FRONT := Vector3(4.8, 1, 6.5)
 const GENERATOR_SABOTAGE := 2.6
 const BARRICADE_DPS := 7.5
-const MAX_ALIVE := 6
+const MAX_ALIVE := BAL.MAX_ALIVE
 ## Точки выхода теней по краю острова. Перед появлением проверяется земля.
 const EDGE_POINTS := [
 	Vector3(14,1.5,9), Vector3(-13,1.5,4), Vector3(0,1.5,-10), Vector3(12,1.3,-6),
@@ -80,7 +81,7 @@ func advance(delta: float) -> void:
 		active = true
 		raid_night = true
 		clock = 0
-		next_wave = 5.5
+		next_wave = BAL.FIRST_WAVE_AT
 		wave = 0
 		dispelled = 0
 		light_lost = false
@@ -93,9 +94,10 @@ func advance(delta: float) -> void:
 		sabotaged = false
 	if clock >= next_wave and night_clock() < night_length() - 4:
 		spawn_wave()
-		var interval := clampf(10.5 - game.day * .35, 6.0, 10.0) / sqrt(PRESSURE.get(night_kind(), 1.0))
+		# Первая волна мягкая, после неё — передышка, чтобы освоить луч. Дальше интервал сжимается по дням.
+		var interval: float = BAL.FIRST_WAVE_PAUSE if wave == 1 else BAL.wave_interval(game.day, PRESSURE.get(night_kind(), 1.0))
 		next_wave = clock + interval
-	if game.sanity < 38 and rng.randf() < delta * .09 and count_alive() < MAX_ALIVE:
+	if game.sanity < BAL.SANITY_HALLUCINATE_AT and rng.randf() < delta * .09 and count_alive() < MAX_ALIVE:
 		spawn_phantom()
 
 func count_alive() -> int:
@@ -141,8 +143,7 @@ func targets() -> Array:
 func spawn_wave() -> void:
 	wave += 1
 	var pressure: float = PRESSURE.get(night_kind(), 1.0)
-	var base := 1 if game.day < 5 else (2 if game.day < 10 else 3)
-	var count := clampi(roundi(base * pressure), 1, 4)
+	var count: int = BAL.wave_size(game.day, wave, pressure)
 	count = mini(count, MAX_ALIVE - count_alive())
 	var goals := targets()
 	var names := []
@@ -170,8 +171,9 @@ func spawn_wave() -> void:
 	game.alert("ВОЛНА %d · тени идут %s" % [wave, ", ".join(text)], "ПКМ — луч фонаря выжигает тьму" if wave == 1 else "Защитите свет до рассвета", 4.5)
 	if wave == 1:
 		game.radio.say("raid_first", true)
-	if wave == 1 and game.day <= 3:
-		game.notify("Тени тянутся к свету, чтобы погасить его. Зажмите ПКМ (или C) — луч фонаря выжигает их.", 8)
+	# Подсказка про луч держится, пока игрок впервые не рассеет тень (см. hud_overlay._draw_beam_tutorial).
+	if game.shadows_dispelled == 0:
+		game.notify("Тени тянутся к свету, чтобы погасить его. Зажмите ПКМ (или C) — луч фонаря выжигает их.", 10, 1)
 
 func spawn_phantom() -> void:
 	var angle := rng.randf() * TAU

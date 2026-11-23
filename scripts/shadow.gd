@@ -2,6 +2,7 @@ extends CharacterBody3D
 ## Преследование, обход препятствия и отступление от света.
 const VISUAL = preload("res://scripts/character_visual.gd")
 const MOTION = preload("res://scripts/character_motion.gd")
+const BAL = preload("res://scripts/balance.gd")
 var keeper: CharacterBody3D
 var game: Node
 var kind := "shadow"
@@ -29,6 +30,10 @@ var day_event := false
 var burn_light: OmniLight3D
 var darkness_bar: Node3D
 var darkness_fill: MeshInstance3D
+## Фонарь пугает тень ненадолго: она пятится (flinch), потом какое-то время не боится (brave).
+var flinch_time := 0.0
+var brave_time := 0.0
+var warn_light: OmniLight3D
 
 func _ready() -> void:
 	motion.bind(VISUAL.install($Visual, kind))
@@ -122,10 +127,21 @@ func _process_dissolve(delta: float) -> void:
 		queue_free()
 
 func begin_attack() -> void:
-	attack_time = motion.length("attack", .93 if kind == "drowned" else .73)
-	windup = .53 if kind == "drowned" else .30
-	attack_cooldown = 1.5
+	windup = BAL.DROWNED_WINDUP if kind == "drowned" else BAL.SHADOW_WINDUP
+	attack_time = maxf(motion.length("attack", .93 if kind == "drowned" else .73), windup + .2)
+	attack_cooldown = BAL.SHADOW_ATTACK_COOLDOWN
 	motion.play("attack", .08, true)
+	# Телеграф удара: красный отсвет и шёпот — у игрока есть время отскочить или ударить лучом.
+	if not is_instance_valid(warn_light):
+		warn_light = OmniLight3D.new()
+		warn_light.name = "AttackTell"
+		warn_light.light_color = Color("ff3a2a")
+		warn_light.omni_range = 3.2
+		warn_light.position = Vector3(0, 1.6, 0)
+		add_child(warn_light)
+	warn_light.light_energy = 3.2
+	if is_instance_valid(game) and game.has_method("on_shadow_windup"):
+		game.on_shadow_windup(self)
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(keeper) or not is_instance_valid(game):
@@ -147,13 +163,25 @@ func _physics_process(delta: float) -> void:
 	offset.y = 0
 	var distance := offset.length()
 	var direction := offset.normalized()
-	var afraid: bool = (not raiding and game.is_safe(global_position)) or (keeper.lantern_on and keeper_distance < (3.2 if raiding else 5.2))
+	flinch_time = maxf(0, flinch_time - delta)
+	brave_time = maxf(0, brave_time - delta)
+	var lantern_scare: bool = keeper.lantern_on and keeper_distance < (3.2 if raiding else BAL.LANTERN_FEAR_RADIUS)
+	if game.day <= BAL.SHADOW_EASY_DAYS or passive:
+		lantern_scare = keeper.lantern_on and keeper_distance < (3.2 if raiding else 5.2)
+	elif lantern_scare and brave_time <= 0 and flinch_time <= 0:
+		flinch_time = BAL.SHADOW_FLINCH_TIME
+		brave_time = BAL.SHADOW_FLINCH_TIME + BAL.SHADOW_BRAVE_TIME
+	elif brave_time > 0 and flinch_time <= 0 and burn_glow <= 0:
+		lantern_scare = false
+	var afraid: bool = (not raiding and game.is_safe(global_position)) or lantern_scare
 	var in_reach := keeper_distance < (1.48 if kind == "drowned" else 1.30) and absf(keeper.global_position.y-global_position.y) < .92
 	var can_hit: bool = in_reach and not game.is_safe(keeper.global_position) and not afraid and not passive
 	recoil_time = maxf(0, recoil_time-delta)
 	if afraid and (not was_afraid or attack_time > 0):
 		attack_time = 0
 		windup = 0
+		if is_instance_valid(warn_light):
+			warn_light.light_energy = 0
 		if not mirroring:
 			recoil_time = motion.length("recoil",.5)
 			motion.play("recoil",.08,true)
@@ -162,8 +190,10 @@ func _physics_process(delta: float) -> void:
 		attack_time = maxf(0,attack_time-delta)
 		if windup > 0:
 			windup = maxf(0,windup-delta)
+			if is_instance_valid(warn_light):
+				warn_light.light_energy = 3.2 * (1.0 if windup > 0 else 0.0)
 			if windup <= 0 and can_hit:
-				game.take_damage(12 + mini(8, game.day/4) + (5 if kind == "drowned" else 0))
+				game.take_damage(BAL.shadow_damage(game.day, kind == "drowned"))
 	elif attack_cooldown <= 0 and can_hit:
 		begin_attack()
 	if afraid:
@@ -174,7 +204,7 @@ func _physics_process(delta: float) -> void:
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty():
 		direction = direction.rotated(Vector3.UP, 1.2)
-	var speed := 2.4 if afraid else 1.65 + minf(0.65, (game.day-1)*0.035)
+	var speed := 2.4 if afraid else BAL.SHADOW_SPEED + minf(BAL.SHADOW_SPEED_MAX_BONUS, (game.day-1)*BAL.SHADOW_SPEED_PER_DAY)
 	if kind == "drowned":
 		speed *= .77
 	if attack_time > 0:

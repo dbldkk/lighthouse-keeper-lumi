@@ -3,6 +3,7 @@ extends Node3D
 ## Каждое событие необязательно, но даёт ресурсы, редкий улов или записки.
 const Geo = preload("res://scripts/geometry.gd")
 const PROVISIONS = preload("res://scripts/provisions.gd")
+const BAL = preload("res://scripts/balance.gd")
 const GENERATOR := Vector3(-6.4, 1, -5.5)
 const PIER := Vector3(23.3, .9, 5.0)
 ## Береговые точки, куда выбрасывает ящики и бутылки.
@@ -14,7 +15,7 @@ const SHORE := [
 const EVENTS := {
 	"wreck": {"title":"ЯЩИК НА БЕРЕГУ","hint":"Заберите груз, пока его не смыло приливом","seconds":45.0,"day":2,"color":Color("f0a24a")},
 	"bottle": {"title":"БУТЫЛКА В ПРИБОЕ","hint":"Кто-то бросил записку в море","seconds":40.0,"day":2,"color":Color("8fd7c0")},
-	"shoal": {"title":"КОСЯК У ПРИЧАЛА","hint":"Редкая рыба клюёт только сейчас — бегите к причалу","seconds":50.0,"day":2,"color":Color("82b9df")},
+	"shoal": {"title":"КОСЯК У ПРИЧАЛА","hint":"Редкая рыба клюёт только сейчас — бегите к причалу","seconds":BAL.SHOAL_SECONDS,"day":2,"color":Color("82b9df")},
 	"sparks": {"title":"ГЕНЕРАТОР ИСКРИТ","hint":"Почините до перегрева, иначе сгорит запас топлива","seconds":32.0,"day":3,"color":Color("ff6a3d")},
 	"fog": {"title":"ТУМАН С МОРЯ","hint":"В тумане бродит тень. Выжгите её лучом (ПКМ)","seconds":38.0,"day":4,"color":Color("9d84ff")}
 }
@@ -107,7 +108,8 @@ func advance(delta: float) -> void:
 			else:
 				start_random()
 		return
-	time_left -= delta
+	if not timer_frozen():
+		time_left -= delta
 	_animate_marker()
 	if current == "fog" and (not is_instance_valid(fog_enemy) or fog_enemy.is_dissolving()):
 		if is_instance_valid(fog_enemy):
@@ -116,6 +118,15 @@ func advance(delta: float) -> void:
 		return
 	if time_left <= 0:
 		fail()
+
+## Таймер события стоит, пока игрок не управляет смотрителем: эфир радио, заставка, возврат из воды.
+func timer_frozen() -> bool:
+	if game.respawn_grace > 0:
+		return true
+	# Рыбный косяк ждёт, пока говорит радио: игрок слушает диалог и не должен терять улов.
+	if current == "shoal" and is_instance_valid(game.radio) and game.radio.speaking():
+		return true
+	return not game.player.enabled
 
 func options() -> Array:
 	var list := []
