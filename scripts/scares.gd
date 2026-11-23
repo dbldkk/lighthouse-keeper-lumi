@@ -30,7 +30,13 @@ var lunge_time := 0.0
 var lunge_hit := false
 var last_damage_time := -99.0
 
-const TYPES := ["figure", "window", "radio", "flicker", "steps", "lunge", "slam", "breath"]
+const TYPES := ["figure", "window", "radio", "flicker", "steps", "lunge", "slam", "breath", "watcher", "water", "shutter", "blackout", "displace"]
+## Присутствие (вторая волна мрака): наблюдатель на краю видимости, что-то в воде, ставни,
+## отключение света в помещении, сдвинутый предмет.
+var watcher: Node3D
+var watcher_time := 0.0
+var swimmer: Node3D
+var swimmer_time := 0.0
 
 func _init() -> void:
 	rng.randomize()
@@ -51,6 +57,8 @@ func reset() -> void:
 	window_strength = 0
 	_clear_figure()
 	_clear_lunger()
+	_clear_watcher()
+	_clear_swimmer()
 
 # ---------------------------------------------------------------- состояние
 func running() -> bool:
@@ -103,6 +111,8 @@ func _process(delta: float) -> void:
 	night_time = night_time + delta if is_night() else 0.0
 	_tick_figure(delta)
 	_tick_lunger(delta)
+	_tick_watcher(delta)
+	_tick_swimmer(delta)
 	_tick_flicker(delta)
 	window_strength = move_toward(window_strength, 0.0, delta * .9) if pending != "window_hold" else window_strength
 	if hush > 0:
@@ -183,6 +193,21 @@ func eligible() -> Array:
 			"breath":
 				if night and not game.player.lantern_on:
 					list.append(kind)
+			"watcher":
+				if not inside and (night or game.island_events.current == "fog" or game.day >= 5):
+					list.append(kind)
+			"water":
+				if not inside and _near_shore():
+					list.append(kind)
+			"shutter":
+				if night or game.day >= 6:
+					list.append(kind)
+			"blackout":
+				if night and inside and not game.lighthouse_interior.active:
+					list.append(kind)
+			"displace":
+				if not inside and is_instance_valid(game.dread) and game.day >= 3:
+					list.append(kind)
 	return list
 
 ## Крупные пугалки идут после короткого затишья — так «внезапно» срабатывает сильнее.
@@ -232,6 +257,13 @@ func fire(kind: String) -> void:
 		"breath":
 			game.sound.scare("breath", -10, rng.randf_range(.9, 1.0), game.player.global_position - _facing() * 1.6 + Vector3.UP * 1.5)
 			game.sanity = maxf(0, game.sanity - 2)
+		"watcher": _watcher()
+		"water": _water()
+		"shutter": _shutter()
+		"blackout": _blackout()
+		"displace":
+			if game.dread.displace_gull():
+				game.sound.sfx("creak", -16, .75)
 
 func _facing() -> Vector3:
 	var yaw: float = game.player.get_node("Visual").rotation.y
@@ -284,6 +316,7 @@ func _figure() -> void:
 	figure_time = .55
 	game.sound.scare("stinger", -3)
 	jolt(.9)
+	_glitch(.6)
 	game.sanity = maxf(0, game.sanity - 6)
 
 func _tick_figure(delta: float) -> void:
@@ -402,6 +435,137 @@ func _slam() -> void:
 	jolt(.8)
 	_flicker(false)
 	game.sanity = maxf(0, game.sanity - 5)
+
+# ---------------------------------------------------------------- присутствие
+func _glitch(amount: float) -> void:
+	if is_instance_valid(game.dread):
+		game.dread.glitch_pulse(amount)
+
+## Наблюдатель: стоит на краю видимости и смотрит. Исчезает, если подойти, навести луч
+## или просто подождать. Почти не пугает «в лоб» — пугает тем, что был.
+func _watcher() -> void:
+	var p: Vector3 = game.player.global_position
+	for attempt in 6:
+		var angle := rng.randf() * TAU
+		var spot: Variant = game.night_raids.ground_at(p + Vector3(cos(angle), 0, sin(angle)) * rng.randf_range(BAL.WATCHER_MIN_DIST, BAL.WATCHER_MAX_DIST))
+		if spot == null:
+			continue
+		_clear_watcher()
+		watcher = _silhouette((spot as Vector3) - Vector3(0, .35, 0), rng.randf_range(2.2, 2.7))
+		watcher.name = "Watcher"
+		var rim := watcher.get_node_or_null("Rim") as OmniLight3D
+		if rim != null:
+			rim.light_energy = 1.2
+		watcher.look_at(Vector3(p.x, watcher.global_position.y, p.z), Vector3.UP, true)
+		watcher_time = BAL.WATCHER_SECONDS
+		game.sound.sfx("whisper", -16, .8, watcher.global_position)
+		return
+
+func _tick_watcher(delta: float) -> void:
+	if not is_instance_valid(watcher):
+		return
+	watcher_time -= delta
+	var p: Vector3 = game.player.global_position
+	var flat := Vector2(watcher.global_position.x - p.x, watcher.global_position.z - p.z).length()
+	var lit: bool = game.lantern_beam.focusing and game.lantern_beam.in_cone(watcher.global_position)
+	if flat < BAL.WATCHER_VANISH_DIST or lit or watcher_time <= 0:
+		var seen := flat < BAL.WATCHER_VANISH_DIST or lit
+		_clear_watcher()
+		if seen:
+			_glitch(.7)
+			jolt(.45)
+			game.sanity = maxf(0, game.sanity - 3)
+			game.sound.scare("stinger", -12, .9)
+
+func _clear_watcher() -> void:
+	if is_instance_valid(watcher):
+		watcher.queue_free()
+	watcher = null
+
+func _near_shore() -> bool:
+	return _water_spot() != null
+
+func _water_spot() -> Variant:
+	var p: Vector3 = game.player.global_position
+	for i in 10:
+		var angle := i * TAU / 10 + rng.randf() * .3
+		for dist in [11.0, 15.0, 19.0]:
+			var at: Vector3 = p + Vector3(cos(angle), 0, sin(angle)) * dist
+			if game.night_raids.ground_at(at) == null and game.night_raids.ground_at(at.lerp(p, .35)) != null:
+				return Vector3(at.x, 0, at.z)
+	return null
+
+## Что-то в воде: тёмная голова медленно поднимается у берега и уходит под воду.
+func _water() -> void:
+	var spot: Variant = _water_spot()
+	if spot == null:
+		return
+	_clear_swimmer()
+	swimmer = Node3D.new()
+	swimmer.name = "Swimmer"
+	game.add_child(swimmer)
+	swimmer.global_position = (spot as Vector3) + Vector3(0, -.6, 0)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.01, 0.012, 0.018)
+	var head := Geo.sphere(swimmer, "Head", Vector3(0, .25, 0), Vector3(.42, .55, .42), Color.BLACK)
+	head.material_override = mat
+	var eye_mat := StandardMaterial3D.new()
+	eye_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	eye_mat.albedo_color = Color(0.9, 0.88, 0.78)
+	for side in [-.09, .09]:
+		var eye := Geo.sphere(swimmer, "Eye", Vector3(side, .36, .19), Vector3(.06, .035, .03), Color.WHITE)
+		eye.material_override = eye_mat
+	var p: Vector3 = game.player.global_position
+	swimmer.look_at(Vector3(p.x, swimmer.global_position.y, p.z), Vector3.UP, true)
+	swimmer_time = BAL.SWIMMER_SECONDS
+	game.sound.sfx("splash", -9, .7, swimmer.global_position)
+
+func _tick_swimmer(delta: float) -> void:
+	if not is_instance_valid(swimmer):
+		return
+	swimmer_time -= delta
+	var k := 1.0 - swimmer_time / BAL.SWIMMER_SECONDS
+	# поднимается за первую треть, смотрит, уходит под воду
+	var rise := smoothstep(0.0, .3, k) * (1.0 - smoothstep(.75, 1.0, k))
+	swimmer.global_position.y = lerpf(-.7, .05, rise)
+	if swimmer_time <= 0:
+		game.sound.sfx("splash", -14, .6, swimmer.global_position)
+		_clear_swimmer()
+
+func _clear_swimmer() -> void:
+	if is_instance_valid(swimmer):
+		swimmer.queue_free()
+	swimmer = null
+
+## Ставни/дверь хлопают у ближайшей постройки.
+func _shutter() -> void:
+	var p: Vector3 = game.player.global_position
+	var spots := [Vector3(5, 2, 0), Vector3(0.3, 2, 0.8), Vector3(-9, 2, -7), Vector3(-12, 2, -35.9), Vector3(1.5, 2, -21.7)]
+	spots.sort_custom(func(a, b): return a.distance_to(p) < b.distance_to(p))
+	var nearest: Vector3 = spots[0]
+	var at: Vector3 = nearest if nearest.distance_to(p) < 30 else p + _facing() * -6.0
+	game.sound.sfx("knock", -4, rng.randf_range(.8, .95), at)
+	await get_tree().create_timer(.35).timeout
+	if is_instance_valid(game):
+		game.sound.sfx("knock", -7, rng.randf_range(.75, .9), at)
+	jolt(.35)
+	game.sanity = maxf(0, game.sanity - 2)
+
+## Внутри гаснет свет: лампы проваливаются в темноту, в тишине кто-то дышит.
+func _blackout() -> void:
+	game.dread.blackout(rng.randf_range(1.2, 2.2))
+	_glitch(.4)
+	await get_tree().create_timer(.5).timeout
+	if is_instance_valid(game):
+		game.sound.scare("breath", -12, .85, game.player.global_position - _facing() * 1.4 + Vector3.UP * 1.5)
+		game.sanity = maxf(0, game.sanity - 3)
+		jolt(.4)
+
+## Для превью и тестов: показать наблюдателя и что-то в воде прямо сейчас.
+func force_presence() -> void:
+	_watcher()
+	_water()
 
 # ---------------------------------------------------------------- обратные вызовы
 func on_player_step() -> void:
