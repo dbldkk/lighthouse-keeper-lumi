@@ -29,6 +29,7 @@ const DREAD = preload("res://scripts/dread.gd")
 const HUNTER = preload("res://scripts/hunter.gd")
 const LORE = preload("res://scripts/lore.gd")
 const SAVE_POINTS = preload("res://scripts/save_points.gd")
+const SUPPLIES = preload("res://scripts/supplies.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -107,6 +108,7 @@ var dread: Node
 var hunter: Node3D
 var lore: Node3D
 var save_points: Node3D
+var supplies: Node3D
 var escalation: Node
 ## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
 var last_safe_position := Vector3(3, 1.3, 4)
@@ -203,6 +205,11 @@ func _ready() -> void:
 	save_points.game = self
 	add_child(save_points)
 	save_points.setup()
+	supplies = SUPPLIES.new()
+	supplies.name = "Supplies"
+	supplies.game = self
+	add_child(supplies)
+	supplies.setup()
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -384,6 +391,8 @@ func start_shift() -> void:
 		hunter.reset()
 	if is_instance_valid(lore):
 		lore.reset()
+	if is_instance_valid(supplies):
+		supplies.reset()
 	playing = true
 	paused = false
 	finished = false
@@ -1263,7 +1272,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				survival.drink()
 		KEY_E:
 			if interaction_cooldown <= 0:
-				if not (hunter.hiding() and hunter.interact()) and not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not hunter.interact() and not lore.interact() and not save_points.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
+				if not (hunter.hiding() and hunter.interact()) and not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not hunter.interact() and not lore.interact() and not save_points.interact() and not supplies.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
 					player.play_gesture("interact")
 		KEY_SPACE:
 			if lighthouse_interior.active:
@@ -1299,6 +1308,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				was_night = false
 		KEY_F9:
 			request_save()
+		KEY_X:
+			supplies.fire_flare()
 		KEY_F10:
 			load_game()
 
@@ -1332,6 +1343,7 @@ func save_game(quiet: bool = false) -> bool:
 	state["homestead"] = homestead.save_data()
 	state["photos"] = photo.save_data()
 	state["lore"] = lore.save_data()
+	state["supplies"] = supplies.save_data()
 	state["hunter"] = {"announced": hunter.announced, "catches": hunter.catches}
 	state["dread_found"] = dread.found.keys()
 	for station in stations:
@@ -1430,6 +1442,8 @@ func load_game() -> bool:
 	homestead.restore(state.get("homestead", {}))
 	photo.restore(state.get("photos", {}))
 	lore.restore(state.get("lore", {}))
+	if state.has("supplies"):
+		supplies.restore(state.supplies)
 	hunter.leave_hiding()
 	var hunter_state: Dictionary = state.get("hunter", {})
 	hunter.announced = bool(hunter_state.get("announced", false))
@@ -1660,7 +1674,7 @@ func apply_lantern_light() -> void:
 
 func toggle_lantern() -> void:
 	if not player.lantern_on and lantern_oil < BAL.LANTERN_RELIGHT_AT:
-		notify("В фонаре нет масла. Масло доливается в хижине, радиостанции или маяке.", 4, 1)
+		notify("В фонаре нет масла. Масло доливается в помещении из запаса (запас: %d)." % roundi(supplies.oil_reserve), 4, 1)
 		sound.cue("flicker")
 		return
 	player.toggle_lantern()
@@ -1668,7 +1682,9 @@ func toggle_lantern() -> void:
 func update_lantern_oil(delta: float) -> void:
 	var sheltered := lighthouse_interior.active or not building_interiors.active.is_empty()
 	if sheltered:
-		lantern_oil = minf(BAL.LANTERN_OIL_MAX, lantern_oil + BAL.LANTERN_OIL_REFILL_INDOORS * delta)
+		# Доливается только из запаса масла (см. supplies.gd) — масло больше не бесконечно.
+		var want := minf(BAL.LANTERN_OIL_MAX - lantern_oil, BAL.LANTERN_OIL_REFILL_INDOORS * delta)
+		lantern_oil += supplies.draw_oil(want) if not first_shift_demo.active() and campaign.enabled else want
 		if lantern_oil > BAL.LANTERN_OIL_LOW + 10:
 			oil_warned = false
 		return

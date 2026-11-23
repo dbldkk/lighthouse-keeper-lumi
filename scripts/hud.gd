@@ -196,7 +196,7 @@ func build_game_ui() -> void:
 	stamina_bar = progress(game_ui, Rect2(51, 815, 190, 7), Color("9cbca6"))
 	beam_label = text(game_ui, "ЛУЧ ФОНАРЯ · ПКМ", Rect2(260, 799, 190, 15), 10, MUTED)
 	beam_bar = progress(game_ui, Rect2(260, 815, 190, 7), Color("ffcf7a"))
-	oil_label = text(game_ui, "МАСЛО ФОНАРЯ", Rect2(51, 829, 190, 15), 10, MUTED)
+	oil_label = text(game_ui, "МАСЛО ФОНАРЯ", Rect2(51, 829, 260, 15), 10, MUTED)
 	oil_bar = progress(game_ui, Rect2(51, 845, 190, 7), Color("e8a95a"))
 	warmth_label = text(game_ui,"",Rect2(260,829,190,15),10,MUTED)
 	panel(game_ui, Rect2(1017, 727, 391, 144))
@@ -455,7 +455,7 @@ func refresh() -> void:
 	var minutes := int(game.hour * 60) % 1440
 	clock_label.text = "ДЕНЬ %02d    %02d:%02d" % [game.day, minutes / 60, minutes % 60]
 	status_label.text = ("НОЧЬ · ДОЖДЬ" if game.coastal_life.rain_strength > 0.2 else "НОЧЬ · ДЕРЖИТЕСЬ СВЕТА") if game.is_night() else game.coastal_life.weather_label()
-	movement_help.text = "WASD ходить  ·  Shift бег  ·  E действие  ·  F фонарь  ·  ПКМ / C луч  ·  R еда  ·  M карта  ·  J журнал" + ("  ·  P фото  ·  L альбом" if game.photo.has_camera else "") + "  ·  Esc меню"
+	movement_help.text = "WASD ходить  ·  Shift бег  ·  E действие  ·  F фонарь  ·  ПКМ / C луч  ·  X ракета  ·  R еда  ·  M карта  ·  J журнал" + ("  ·  P фото  ·  L альбом" if game.photo.has_camera else "") + "  ·  Esc меню"
 	if game.lighthouse_interior.active:
 		status_label.text = "МАЯК · ВНУТРИ"
 		movement_help.text = "WASD ходить по лестнице  ·  E действие  ·  F фонарь  ·  R еда  ·  M карта  ·  J журнал  ·  Esc меню"
@@ -480,7 +480,8 @@ func refresh() -> void:
 	sanity_value.text = str(roundi(game.sanity))
 	oil_bar.value = game.lantern_oil
 	oil_bar.modulate = Color(1.3, .55, .4) if game.lantern_oil < game.BAL.LANTERN_OIL_LOW and blink else Color.WHITE
-	oil_label.text = "МАСЛО ФОНАРЯ · %d%%" % roundi(game.lantern_oil) + ("  · ДОЛИВАЕТСЯ" if (game.lighthouse_interior.active or not game.building_interiors.active.is_empty()) and game.lantern_oil < 99.5 else "")
+	var refilling: bool = (game.lighthouse_interior.active or not game.building_interiors.active.is_empty()) and game.lantern_oil < 99.5 and game.supplies.oil_reserve > 0
+	oil_label.text = "МАСЛО %d%% · ЗАПАС %d · РАКЕТ %d" % [roundi(game.lantern_oil), roundi(game.supplies.oil_reserve), game.supplies.flares] + ("  · ДОЛИВАЕТСЯ" if refilling else "")
 	hunger_bar.value = game.hunger
 	hunger_bar.modulate = Color(1, .45, .4) if game.hunger < 35 and int(Time.get_ticks_msec() / 400) % 2 == 0 else Color.WHITE
 	sanity_bar.value = game.sanity
