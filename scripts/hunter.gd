@@ -4,8 +4,7 @@ extends Node3D
 ## patrol → investigate → chase → search, flee — когда его отгоняет свет маяка, костёр или ракета.
 ## От него прячутся: шкаф в хижине, ниша под лестницей маяка, брезент на лодке.
 ## В укрытии рядом с охотником нужно задержать дыхание (пробел) — запас ограничен и стоит рассудка.
-const VISUAL = preload("res://scripts/character_visual.gd")
-const MOTION = preload("res://scripts/character_motion.gd")
+const HUNTER_VISUAL = preload("res://scripts/hunter_visual.gd")
 const Geo = preload("res://scripts/geometry.gd")
 const BI = preload("res://scripts/building_interiors.gd")
 const LI = preload("res://scripts/lighthouse_interior.gd")
@@ -31,7 +30,8 @@ var enabled := true
 var active := false
 var state := "idle"                ## idle, patrol, investigate, chase, search, flee, room
 var body: CharacterBody3D
-var motion := MOTION.new()
+var visual: Node3D                 ## модель + AnimationTree + звуки анимаций (hunter_visual.gd)
+var sniff_time := 0.0              ## пауза «принюхаться» в поиске
 var target := Vector3.ZERO
 var last_known := Vector3.ZERO
 var state_time := 0.0
@@ -75,44 +75,33 @@ func _ready() -> void:
 	shape.shape = capsule
 	shape.position.y = 1.15
 	body.add_child(shape)
-	var visual := Node3D.new()
+	visual = HUNTER_VISUAL.new()
 	visual.name = "Visual"
-	visual.scale = Vector3(1.22, 1.42, 1.22)
+	visual.scale = Vector3.ONE * 1.08
 	body.add_child(visual)
-	var model := VISUAL.install(visual, "drowned")
-	if model != null:
-		motion.bind(model)
-		_darken(model)
-	var eye_mat := StandardMaterial3D.new()
-	eye_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	eye_mat.albedo_color = Color(1.0, .86, .62)
-	for side in [-.075, .075]:
-		var eye := Geo.sphere(body, "Eye", Vector3(side, 2.42, .2), Vector3(.05, .03, .03), Color.WHITE)
-		eye.material_override = eye_mat
+	visual.build(self)
+	# отблеск глаз: свет едет вместе с головой
 	var glow := OmniLight3D.new()
 	glow.name = "EyeGlow"
-	glow.position = Vector3(0, 2.4, .5)
 	glow.light_color = Color("ffcf8a")
-	glow.light_energy = .5
-	glow.omni_range = 1.6
-	body.add_child(glow)
+	glow.light_energy = .9
+	glow.omni_range = 2.4
+	if visual.head_attach != null:
+		visual.head_attach.add_child(glow)
+		glow.position = Vector3(0, .05, .25)
+	else:
+		glow.position = Vector3(0, 2.3, .5)
+		body.add_child(glow)
 	# холодный контур — чтобы силуэт читался в темноте (честность)
 	var rim := OmniLight3D.new()
 	rim.name = "Rim"
 	rim.position = Vector3(-.6, 1.8, -.8)
 	rim.light_color = Color("7f9fb8")
-	rim.light_energy = .9
-	rim.omni_range = 2.6
+	rim.light_energy = 1.6
+	rim.omni_range = 3.6
 	body.add_child(rim)
 	add_child(body)
 	body.hide()
-
-func _darken(model: Node) -> void:
-	for mesh in model.find_children("*", "MeshInstance3D", true, false):
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(.03, .035, .04)
-		mat.roughness = .9
-		(mesh as MeshInstance3D).material_override = mat
 
 func setup() -> void:
 	_build_spots()
@@ -315,6 +304,17 @@ func _set_state(next: String) -> void:
 		return
 	state = next
 	state_time = 0
+	sniff_time = 0.0
+	if next not in ["chase", "search"]:
+		door_clock = 0
+
+## Клип модели следует за состоянием: у двери — door_wait, в поиске на месте — search, бросок — grab.
+func _tick_visual(delta: float) -> void:
+	if visual == null:
+		return
+	visual.door_wait = door_clock > 0 and space.is_empty()
+	visual.sniffing = state == "search" or (not space.is_empty() and hiding())
+	visual.tick(delta)
 
 func _in_light(at: Vector3) -> bool:
 	if game.lighthouse_on and Vector2(at.x + 9, at.z + 7).length() < 8.5:
@@ -376,12 +376,14 @@ func _process(delta: float) -> void:
 	else:
 		_tick_room(delta)
 	_tick_audio(delta)
-	motion.tick(delta)
+	_tick_visual(delta)
 
 func _tick_outside(delta: float) -> void:
 	var here := body.global_position
 	var p: Vector3 = game.player.global_position
 	var d := Vector2(p.x - here.x, p.z - here.z).length()
+	if _player_outside():
+		door_clock = 0
 	# Свет отгоняет
 	if state != "flee" and _in_light(here):
 		repel_time = 6.0
@@ -433,8 +435,14 @@ func _tick_outside(delta: float) -> void:
 			elif state_time > SEARCH_SECONDS:
 				_set_state("patrol")
 				target = _patrol_point()
+			elif sniff_time > 0:
+				# замер и принюхивается (клип search), потом идёт дальше
+				sniff_time -= delta
+				body.velocity = Vector3.ZERO
+				_sniff_hiding()
 			else:
 				if _flat(here, target) < 1.2:
+					sniff_time = 2.4
 					target = last_known + Vector3(rng.randf_range(-5, 5), 0, rng.randf_range(-5, 5))
 					var g: Variant = game.night_raids.ground_at(target)
 					if g != null:
@@ -456,7 +464,7 @@ func _move(to: Vector3, speed: float, delta: float) -> void:
 	var here := body.global_position
 	var dir := Vector3(to.x - here.x, 0, to.z - here.z)
 	if dir.length() < .2:
-		motion.play("idle", .2)
+		body.velocity = Vector3.ZERO
 		return
 	dir = dir.normalized()
 	# не заходит в воду: пробует обойти
@@ -476,8 +484,6 @@ func _move(to: Vector3, speed: float, delta: float) -> void:
 		if g != null:
 			body.global_position.y = (g as Vector3).y - .35
 	body.look_at(body.global_position - dir, Vector3.UP)
-	motion.play("jog" if speed > 3.5 else "walk", .2)
-	motion.rate = speed / 3.0
 	stuck_clock += delta
 	if stuck_clock > 1.5:
 		if body.global_position.distance_to(stuck_from) < speed * .35 and state != "chase":
@@ -487,6 +493,8 @@ func _move(to: Vector3, speed: float, delta: float) -> void:
 
 func _catch() -> void:
 	catches += 1
+	if visual != null:
+		visual.play_grab()
 	game.sound.scare("stinger", 0, .82)
 	game.sound.sfx("groan", 0, .7, game.player.global_position + Vector3.UP)
 	if is_instance_valid(game.scares):
@@ -518,6 +526,7 @@ func _try_follow_inside(delta: float) -> void:
 	var door: Vector3 = LI.OUTSIDE_DOOR if room == "lighthouse" else game.building_interiors.exit_at(room)
 	if _flat(body.global_position, door) > 3.0:
 		target = door
+		door_clock = 0
 		return
 	door_clock += delta
 	if door_clock == delta:
@@ -572,8 +581,6 @@ func _room_step(speed: float, delta: float) -> void:
 	if dir.length() > .05:
 		body.global_position += dir.normalized() * minf(dir.length(), speed * delta)
 		body.look_at(body.global_position - dir.normalized(), Vector3.UP)
-		motion.play("walk", .2)
-		motion.rate = speed / 2.5
 
 func _leave_room() -> void:
 	var door: Vector3 = LI.OUTSIDE_DOOR if space == "lighthouse" else game.building_interiors.exit_at(space)
@@ -635,7 +642,7 @@ func _tick_audio(delta: float) -> void:
 	var d := here.distance_to(listener)
 	step_clock -= delta
 	var moving := body.velocity.length() > .4 or not space.is_empty()
-	if moving and step_clock <= 0 and d < 30:
+	if moving and step_clock <= 0 and d < 30 and (visual == null or not visual.available()):
 		step_clock = .34 if state == "chase" else .62
 		game.sound.phantom_step(here, "wood" if not space.is_empty() else "grass")
 	growl_clock -= delta

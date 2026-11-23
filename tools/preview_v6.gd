@@ -107,4 +107,75 @@ func settings_shots() -> void:
 	panel.close()
 
 func hunter_shots() -> void:
-	pass
+	game.return_to_title()
+	await create_timer(.3).timeout
+	game.start_shift()
+	game.tutorial.stop()
+	game.hours_per_second = 0
+	game.day = 4
+	game.campaign.state.day = 4
+	game.campaign.state.night = true
+	game.hour = 23
+	game.lighthouse_on = false
+	game.player.lantern_on = true
+	var h: Node3D = game.hunter
+	place(Vector3(2, 1.2, 7), 11)
+	await create_timer(1.2).timeout
+	quiet()
+	h.preview_freeze = true
+	h.active = true
+	h.space = ""
+	h.body.show()
+	var at: Vector3 = Vector3(4.4, game.player.global_position.y - 1.0, 10.4)
+	h.body.global_position = at
+	h.body.look_at(Vector3(2, at.y, 7), Vector3.UP, true)    # лицом к смотрителю
+	# игровой ракурс
+	h.visual.pose_for_preview("stalk", .5)
+	await create_timer(.4).timeout
+	quiet()
+	await shot("9_hunter_ingame")
+	# крупные планы: отдельная перспективная камера, свет — фонарь смотрителя + контур
+	game.hud.visible = false
+	var cam := Camera3D.new()
+	cam.fov = 38
+	game.add_child(cam)
+	cam.make_current()
+	var lamp := OmniLight3D.new()       # как фонарь в руке смотрителя
+	lamp.light_color = Color("ffd2a0")
+	lamp.light_energy = 1.4
+	lamp.omni_range = 9
+	game.add_child(lamp)
+	var poses := [
+		["10_hunter_idle", "idle", 1.0, Vector3(1.2, 1.5, -4.6), Vector3(0, 1.3, 0)],
+		["11_hunter_stalk", "stalk", .55, Vector3(-2.6, 1.4, -3.8), Vector3(0, 1.2, 0)],
+		["12_hunter_lurch", "lurch", .3, Vector3(2.8, 1.2, -3.6), Vector3(0, 1.1, 0)],
+		["13_hunter_search", "search", 2.1, Vector3(-1.6, 1.8, -3.6), Vector3(0, 1.3, 0)],
+		["14_hunter_grab", "grab", .55, Vector3(.6, 1.6, -3.4), Vector3(0, 1.4, 0)],
+		["15_hunter_door_wait", "door_wait", 1.5, Vector3(-1.4, 1.5, -4.2), Vector3(0, 1.3, 0)],
+	]
+	for p in poses:
+		h.visual.pose_for_preview(p[1], p[2])
+		var basis: Basis = h.body.global_transform.basis
+		# в позициях выше «перед» — это -Z камеры; модель смотрит по +Z тела
+		cam.global_position = at + basis * Vector3(p[3].x, p[3].y, -p[3].z)
+		cam.look_at(at + basis * Vector3(p[4].x, p[4].y, -p[4].z) * Vector3(1, 1, 1))
+		lamp.global_position = at + basis * Vector3(.8, 1.4, 2.4)
+		await create_timer(.3).timeout
+		quiet()
+		await shot(p[0])
+	# лицо: камера по кости головы
+	h.visual.pose_for_preview("idle", .4)
+	await create_timer(.2).timeout
+	var basis2: Basis = h.body.global_transform.basis
+	var head: Vector3 = h.visual.head_attach.global_position
+	cam.global_position = head + basis2 * Vector3(.35, .05, 1.25)
+	cam.look_at(head + basis2 * Vector3(0, 0, .15))
+	lamp.global_position = head + basis2 * Vector3(.7, -.2, 1.6)
+	await create_timer(.3).timeout
+	quiet()
+	await shot("16_hunter_face")
+	cam.queue_free()
+	lamp.queue_free()
+	game.hud.visible = true
+	h.visual.resume_tree()
+	h.preview_freeze = false

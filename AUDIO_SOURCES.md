@@ -67,5 +67,16 @@
 и `music/menu_tide`, кластер в `sfx/stinger`; запасные варианты для любого файла, если запись CC0 недоступна.
 `tools/audio/synth_sfx.py`: шаги `assets/audio/steps/*` (дальше `horror_sfx.py` делает их глуше и
 добавляет пространство) и `assets/audio/horror/*`.
+`tools/audio/hunter_sfx.py` (seed 4040): звуки модели охотника, привязанные к фазам анимаций —
+`sfx/hunter_step_1..4` (тяжёлые босые шаги по мокрому), `sfx/hunter_breath_1..3` (мокрое хриплое дыхание),
+`sfx/hunter_sniff_1..2` (принюхивание), `sfx/hunter_crack_1..4` (хруст костей и суставов),
+`sfx/hunter_grab_1..2` (рёв-бросок). Полностью синтезированы, лицензия — как у проекта.
+
+## Модель охотника
+
+`assets/models/characters/hunter/hunter.glb` — собственная модель: построена скриптом
+`tools/blender/hunter_build.py` в Blender 4.2 LTS (headless), исходник — `assets/source_blender/hunter/hunter.blend`.
+Скелет, веса и шесть анимаций (idle, stalk, lurch, search, grab, door_wait) созданы тем же скриптом;
+внешних моделей и текстур нет.
 
 Остальная музыка (`music/gramophone.wav`, `music/morning_signal.wav`) — из исходного репозитория, не менялась.
