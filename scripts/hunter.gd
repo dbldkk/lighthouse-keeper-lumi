@@ -96,6 +96,14 @@ func _ready() -> void:
 	glow.light_energy = .5
 	glow.omni_range = 1.6
 	body.add_child(glow)
+	# холодный контур — чтобы силуэт читался в темноте (честность)
+	var rim := OmniLight3D.new()
+	rim.name = "Rim"
+	rim.position = Vector3(-.6, 1.8, -.8)
+	rim.light_color = Color("7f9fb8")
+	rim.light_energy = .9
+	rim.omni_range = 2.6
+	body.add_child(rim)
 	add_child(body)
 	body.hide()
 
@@ -340,8 +348,12 @@ func _player_noise() -> float:
 	return HEAR_RUN if game.player.is_running else HEAR_WALK
 
 # ---------------------------------------------------------------- кадр
+var preview_freeze := false
+
 func _process(delta: float) -> void:
 	if not is_instance_valid(game):
+		return
+	if preview_freeze:
 		return
 	_update_hud()
 	if game.paused:

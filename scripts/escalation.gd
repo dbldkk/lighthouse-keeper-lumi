@@ -19,6 +19,7 @@ var lightning_clock := 3.0
 var done := {}
 var fearless_told := false
 var fog_amount := 0.0
+var flash_hold := false            ## для превью: удержать вспышку
 
 func _init() -> void:
 	rng.randomize()
@@ -134,7 +135,8 @@ func strike(close := false) -> void:
 	game.camera_shake = maxf(game.camera_shake, .35 if close else .15)
 
 func _apply_visuals(delta: float) -> void:
-	flash = maxf(0, flash - delta * 3.2)
+	if not flash_hold:
+		flash = maxf(0, flash - delta * 3.2)
 	var sun: DirectionalLight3D = game.world.get_node_or_null("Sun")
 	var env: Environment = game.world.get_node("CoastalAtmosphere").environment
 	if flash > 0:

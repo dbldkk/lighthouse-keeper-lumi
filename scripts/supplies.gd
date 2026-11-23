@@ -225,8 +225,8 @@ func fire_flare() -> bool:
 	flare_node.global_position = at + Vector3(0, 1.5, 0)
 	flare_light = OmniLight3D.new()
 	flare_light.light_color = Color("ff5a3c")
-	flare_light.light_energy = 6.0
-	flare_light.omni_range = FLARE_RADIUS
+	flare_light.light_energy = 9.0
+	flare_light.omni_range = FLARE_RADIUS + 4
 	flare_node.add_child(flare_light)
 	var core := Geo.sphere(flare_node, "Core", Vector3.ZERO, Vector3(.25, .25, .25), Color("ffb08a"))
 	var mat := StandardMaterial3D.new()
@@ -253,8 +253,8 @@ func _tick_flare(delta: float) -> void:
 	if flare_time <= 0 or not is_instance_valid(flare_node):
 		return
 	flare_time -= delta
-	flare_node.global_position.y = minf(flare_node.global_position.y + delta * 2.5, game.player.global_position.y + 9)
-	flare_light.light_energy = 6.0 * clampf(flare_time / 3.0, 0, 1) * (0.85 + randf() * .3)
+	flare_node.global_position.y = minf(flare_node.global_position.y + minf(delta, .05) * 2.5, game.player.global_position.y + 6)
+	flare_light.light_energy = 9.0 * clampf(flare_time / 3.0, 0, 1) * (0.85 + randf() * .3)
 	# пока горит — держит охотника подальше
 	if is_instance_valid(game.hunter) and game.hunter.active:
 		var fat := flare_node.global_position

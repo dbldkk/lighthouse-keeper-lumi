@@ -31,6 +31,7 @@ const LORE = preload("res://scripts/lore.gd")
 const SAVE_POINTS = preload("res://scripts/save_points.gd")
 const SUPPLIES = preload("res://scripts/supplies.gd")
 const ESCALATION = preload("res://scripts/escalation.gd")
+const SMALL_SCARES = preload("res://scripts/small_scares.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -110,6 +111,7 @@ var hunter: Node3D
 var lore: Node3D
 var save_points: Node3D
 var supplies: Node3D
+var small_scares: Node3D
 var escalation: Node
 ## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
 var last_safe_position := Vector3(3, 1.3, 4)
@@ -215,6 +217,11 @@ func _ready() -> void:
 	escalation.name = "Escalation"
 	escalation.game = self
 	add_child(escalation)
+	small_scares = SMALL_SCARES.new()
+	small_scares.name = "SmallScares"
+	small_scares.game = self
+	add_child(small_scares)
+	small_scares.setup()
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -400,6 +407,8 @@ func start_shift() -> void:
 		supplies.reset()
 	if is_instance_valid(escalation):
 		escalation.reset()
+	if is_instance_valid(small_scares):
+		small_scares.reset()
 	playing = true
 	paused = false
 	finished = false
@@ -1352,6 +1361,7 @@ func save_game(quiet: bool = false) -> bool:
 	state["lore"] = lore.save_data()
 	state["supplies"] = supplies.save_data()
 	state["escalation"] = escalation.save_data()
+	state["small_scares"] = small_scares.save_data()
 	state["hunter"] = {"announced": hunter.announced, "catches": hunter.catches}
 	state["dread_found"] = dread.found.keys()
 	for station in stations:
@@ -1453,6 +1463,7 @@ func load_game() -> bool:
 	if state.has("supplies"):
 		supplies.restore(state.supplies)
 	escalation.restore(state.get("escalation", {}))
+	small_scares.restore(state.get("small_scares", {}))
 	hunter.leave_hiding()
 	var hunter_state: Dictionary = state.get("hunter", {})
 	hunter.announced = bool(hunter_state.get("announced", false))

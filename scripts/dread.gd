@@ -92,8 +92,15 @@ func _update_screen(delta: float) -> void:
 	if running() and game.sanity < BAL.SANITY_HALLUCINATE_AT and rng.randf() < delta * BAL.DREAD_GLITCH_RATE * (1.0 - game.sanity / BAL.SANITY_HALLUCINATE_AT):
 		glitch_pulse(rng.randf_range(.3, .7))
 	glitch = move_toward(glitch, 0, delta * 3.5)
-	mat.set_shader_parameter("dread", level)
-	mat.set_shader_parameter("sight", sight)
+	var bolt: float = float(game.escalation.flash) if is_instance_valid(game.escalation) else 0.0
+	if is_instance_valid(game.supplies) and game.supplies.flare_active():
+		bolt = maxf(bolt, .55)
+	var flare_glow := 0.0
+	if is_instance_valid(game.supplies) and game.supplies.flare_active():
+		flare_glow = clampf(game.supplies.flare_time / 3.0, 0.0, 1.0) * .8
+	mat.set_shader_parameter("flare", flare_glow)
+	mat.set_shader_parameter("dread", level * (1.0 - .6 * bolt))
+	mat.set_shader_parameter("sight", sight + bolt * 2.5)
 	mat.set_shader_parameter("focus", focus)
 	mat.set_shader_parameter("mist", mist)
 	mat.set_shader_parameter("glitch", glitch)

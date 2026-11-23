@@ -1,161 +1,178 @@
 extends SceneTree
-## Скриншоты новых занятий для презентации: мини-игры, каменоломня, укрепления, огород,
-## видоискатель фотоаппарата, ночной таймер и причал. Запуск с экраном (не --headless):
-## godot --path . --script res://tools/preview_features.gd
-const OUT := "res://docs/features/"
+## Скриншоты новых систем: охотник, укрытие, журнал, концовка, шторм, зеркало, тайники.
+## godot --path . --script res://tools/preview_features.gd -- /abs/dir
+var out := "/tmp/features"
 var game: Node
 
 func _initialize() -> void:
+	var args := OS.get_cmdline_user_args()
+	if args.size() > 0: out = args[0]
 	call_deferred("run")
 
 func shot(name: String) -> void:
+	for i in 4:
+		await process_frame
 	await RenderingServer.frame_post_draw
-	root.get_texture().get_image().save_png(OUT + name)
-	print("Captured ", OUT + name)
+	var path := out.path_join(name + ".png")
+	root.get_texture().get_image().save_png(path)
+	print("Captured ", path)
 
-func clean() -> void:
+func quiet() -> void:
 	game.hud.overlay.card_time = 0
 	game.hud.overlay.alert_time = 0
 	game.message_time = 0
 	game.radio.reset()
 
-func focus(at: Vector3, zoom: float) -> void:
+func place(at: Vector3, zoom := 22.0) -> void:
 	game.player.position = at
+	game.player.velocity = Vector3.ZERO
+	game.camera_focus = at + Vector3.UP
 	game.target_zoom = zoom
 	game.camera_zoom = zoom
-	game.camera_focus = at + Vector3(0, 1, 0)
+
+func setup_day(n: int) -> void:
+	game.day = n
+	game.campaign.state.day = n
+	game.campaign.ensure_day()
+	game.campaign.state.completed_days = range(1, n)
+	for i in game.campaign.entry().goals.size():
+		game.campaign.state.marks[str(i)] = true
+
+func night(n: int) -> void:
+	setup_day(n)
+	game.barricade_built = true
+	game.campaign.state.beacon_charge = 2
+	game.lighthouse_on = true
+	game.beacon.set_powered(true)
+	game.player.lantern_on = true
+	game.campaign.begin_night()
+	game.campaign.state.night_clock = 12
+	game.hour = 23.0
+	game.clear_enemies()
+	game.lantern_oil = 80
 
 func run() -> void:
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
+	DirAccess.make_dir_recursive_absolute(out)
 	game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
-	await process_frame
+	await create_timer(1.0).timeout
 	game.checkpoints_enabled = false
 	game.save_path = "user://preview_features.json"
 	game.start_shift()
 	game.hours_per_second = 0
-	game.day = 6
-	game.campaign.state.day = 6
-	game.campaign.ensure_day()
-	game.expedition.state.merge({"tools":true,"battery":true,"signal":true,"pump":true,"last_dawn":6,"scrap":6}, true)
-	game.expedition.update_visuals()
-	game.barricade_built = true
-	game.build_barricade()
-	game.lighthouse_on = true
-	game.beacon.set_powered(true)
-	game.campaign.state.beacon_charge = 2
-	game.inventory.wood = 30
-	game.inventory.stone = 30
-	game.photo.has_camera = true
+	var h: Node3D = game.hunter
 
-	# 1. Мини-игра ремонта генератора.
-	game.lighthouse_on = false
-	game.beacon.set_powered(false)
-	game.inventory.fuel = 1
-	focus(Vector3(-6.4, 1.2, -4.7), 16)
+	# 1. охотник
+	night(6)
+	place(Vector3(2, 1.2, 7), 18)
 	await create_timer(1.0).timeout
-	clean()
-	game.minigames.offer(game.homestead.station("quarry") if false else _station("beacon"))
-	game.minigames.hits = 1
-	game.minigames.needle = game.minigames.sector - .9
-	await create_timer(.2).timeout
-	await shot("minigame-repair.png")
-	game.minigames.close()
+	h.body.global_position = Vector3(4.4, 1.0, 9.2)
+	h._set_state("chase")
+	h.body.look_at(Vector3(2, h.body.global_position.y, 7) * Vector3(1, 0, 1) + Vector3(0, h.body.global_position.y, 0), Vector3.UP, true)
+	h.motion.play("jog", 0)
+	h.motion.tick(.3)
+	game.scares.fear = .8
+	game.paused = true
+	await create_timer(.6).timeout
+	quiet()
+	game.notify("Оно идёт на свет фонаря. Погасите фонарь или бегите к маяку.", 6, 1)
+	await shot("1_hunter")
+	game.paused = false
 
-	# 2. Жарка рыбы.
-	game.fish_items.append(game.PROVISIONS.fish_item("mackerel", 900))
-	game.sync_provisions()
-	game.minigames.open_cook(_station("cook"))
-	game.minigames.doneness = .7
-	game.minigames.side = 1
-	game.minigames.sides_good = 1
-	await create_timer(.15).timeout
-	await shot("minigame-cooking.png")
-	game.minigames.close()
-
-	# 3. Розжиг костра.
-	game.minigames.open_fire(_station("fire"))
-	game.minigames.stage = 1
-	game.minigames.flame = .62
-	game.minigames.steady = 1.3
-	await create_timer(.15).timeout
-	await shot("minigame-fire.png")
-	game.minigames.close()
-	game.lighthouse_on = true
-	game.beacon.set_powered(true)
-
-	# 4. Укрепления: дерево и камень вокруг хижины, огород с вороной.
-	for id in ["fort_n", "fort_ne", "fort_nw", "fort_e", "fort_w", "fort_se"]:
-		game.homestead.levels[id] = 2 if id in ["fort_n", "fort_e", "fort_se"] else 1
-	game.homestead.levels.fort_front = 2
-	game.homestead._refresh_visuals()
-	game.homestead.beds[0] = {"stage":4,"water":true,"grow":0.0,"crop":0,"bird":false}
-	game.homestead.beds[1] = {"stage":3,"water":true,"grow":0.0,"crop":1,"bird":false}
-	game.homestead.beds[2] = {"stage":2,"water":false,"grow":0.0,"crop":2,"bird":false}
-	for i in 3:
-		game.homestead._refresh_bed(i)
-	focus(Vector3(9.5, 1.2, 4.5), 17)
-	game.homestead._spawn_bird(1)
-	for i in 40:
-		game.homestead._birds(.1)
-	await create_timer(1.2).timeout
-	clean()
-	await shot("fortified-cabin-garden.png")
-
-	# 5. Каменоломня.
-	focus(Vector3(10.6, 1.2, -14.6), 12)
-	await create_timer(1.2).timeout
-	clean()
-	await shot("quarry.png")
-
-	# 6. Видоискатель фотоаппарата и фото-момент.
-	focus(Vector3(16, 1.2, 2.5), 20)
-	game.day = 2
-	game.campaign.state.day = 2
-	game.campaign.ensure_day()
-	game.photo._start_moment(game.photo.MOMENTS[0])
+	# 2. укрытие: шкаф в хижине, охотник внутри
+	game.enter_building("cabin")
 	await create_timer(.5).timeout
-	clean()
-	game.photo.open()
-	game.photo.yaw = atan2(1.0, -.1)
-	game.photo.pitch = .12
-	game.photo.fov = 60
+	var wardrobe: Dictionary = {}
+	for s in h.spots:
+		if s.id == "wardrobe":
+			wardrobe = s
+	game.player.global_position = wardrobe.at + Vector3(.3, .05, .5)
+	h.hide_in("wardrobe")
+	h.space = "cabin"
+	h.room_clock = 0
+	h.body.global_position = wardrobe.at + Vector3(.9, 0, 1.1)
+	h.body.look_at(wardrobe.at + Vector3(0, 0, 0), Vector3.UP, true)
+	h.holding_forced = true
+	h.breath = 3.2
 	await create_timer(.4).timeout
-	await shot("camera-viewfinder.png")
-	game.photo.selfie = true
-	game.photo.orbit = .4
-	await create_timer(.4).timeout
-	await shot("camera-selfie.png")
-	game.photo.close()
+	quiet()
+	h._update_hud()
+	h.preview_freeze = true
+	h.prompt.text = "ОНО РЯДОМ · держите ПРОБЕЛ — не дышать"
+	h.prompt.add_theme_color_override("font_color", Color("ffb1a1"))
+	h.prompt.show()
+	h.breath_bar.value = 3.2
+	h.breath_bar.show()
+	await shot("2_hiding")
+	h.preview_freeze = false
+	h.holding_forced = false
+	h.leave_hiding()
+	h.space = ""
+	h._despawn()
 
-	# 7. Ночь: таймер до рассвета и журнал без переполнения.
-	game.day = 9
-	game.campaign.state.day = 9
-	game.campaign.ensure_day()
-	for i in game.campaign.entry().goals.size():
-		game.campaign.state.marks[str(i)] = true
-	game.hunger = 80
-	game.player.lantern_on = true
-	focus(Vector3(5.5, 1.2, 7.5), 20)
-	game.campaign.begin_night()
-	game.campaign.state.night_clock = 21
-	game.night_raids.advance(6)
-	game.night_raids.next_wave = game.night_raids.clock + 5
-	await create_timer(1.0).timeout
-	clean()
-	await shot("night-dawn-timer.png")
+	# 3. зеркало: отражение запаздывает и смотрит
+	var ss: Node3D = game.small_scares
+	game.player.global_position = ss.mirror_at() + Vector3(1.6, -1.4, 1.0)
+	await create_timer(.5).timeout
+	ss.stare_time = 30.0
+	ss.double.global_position = ss.mirror_at() + Vector3(1.0, -1.4, -.3)
+	game.target_zoom = 7.0
+	await create_timer(.8).timeout
+	ss.viewport.get_texture().get_image().save_png(out.path_join("6_mirror_view.png"))
+	quiet()
+	await shot("6_mirror")
+	ss.stare_time = 0
+	game.exit_building()
+	await create_timer(.3).timeout
 
-	# 8. Причал вблизи (без ряби).
+	# 4. журнал: страница дневника
+	game.lore.collect("diary_2")
+	game.lore.collect("tape_1")
+	await create_timer(.2).timeout
+	quiet()
+	game.open_journal_entry("l:diary_2")
+	await create_timer(.3).timeout
+	await shot("3_journal")
+	game.close_journal()
+
+	# 5. шторм 5-й ночи
 	game.campaign.state.night = false
-	game.hour = 11
-	focus(Vector3(-25, 1.2, -21), 9)
-	await create_timer(1.2).timeout
-	clean()
-	await shot("pier-closeup.png")
-	quit()
+	await create_timer(.2).timeout
+	night(5)
+	place(Vector3(-2, 1.3, -1), 26)
+	game.coastal_life.weather_mode = 1
+	await create_timer(1.5).timeout
+	game.escalation.strike(true)
+	game.escalation.flash_hold = true
+	game.escalation.flash = .8
+	await create_timer(.3).timeout
+	quiet()
+	game.notify("ШТОРМ. Ливень, молнии, генератор под ударом. Переживите ночь до рассвета.", 6, 1)
+	await shot("5_storm")
 
-func _station(id: String) -> Area3D:
-	for item in game.stations:
-		if item.station_id == id:
-			return item
-	return null
+	# 7. тайник и ракета
+	game.escalation.flash_hold = false
+	game.escalation.flash = 0
+	var c: Dictionary = game.supplies.caches[0] if not game.supplies.caches.is_empty() else {}
+	place(Vector3(2, 1.2, 7), 20)
+	game.supplies.flares = 2
+	await create_timer(.4).timeout
+	game.supplies.fire_flare()
+	await create_timer(.8).timeout
+	print("FLARE ", game.supplies.flare_active(), " ", game.supplies.flare_node.global_position if is_instance_valid(game.supplies.flare_node) else Vector3.ZERO, " flares ", game.supplies.flares)
+	quiet()
+	await shot("7_flare")
+
+	# 4. концовка
+	game.lore.ending = "dark"
+	game.finish_shift(true)
+	await create_timer(.5).timeout
+	if game.album.visible:
+		game.album.hide()
+	game.hud.show_menu("win")
+	await create_timer(.5).timeout
+	await shot("4_ending_dark")
+	game.lore.card_layer.hide()
+	await create_timer(.2).timeout
+	await shot("4b_ending_menu")
+	quit(0)

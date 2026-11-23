@@ -13,6 +13,7 @@ uniform float dread = 0.0;                // 0 — обычная картинк
 uniform float mist = 0.0;                 // экранный туман-клочья
 uniform float glitch = 0.0;               // сбой кадра (0–1, короткие импульсы)
 uniform float menu = 0.0;                 // титульный экран
+uniform float flare = 0.0;                // сигнальная ракета: красный свет не выцветает
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -47,10 +48,12 @@ void fragment() {
 	float highlight = smoothstep(0.42, 0.85, luminance);
 	// Выцветание: днём пасмурно и серо, ночью почти монохром; свет фонарей сохраняет цвет.
 	float sat = mix(mix(0.70, 0.60, night), mix(0.42, 0.30, night), dread) * (1.0 - tension * 0.35);
+	sat = mix(sat, 1.15, flare);
 	vec3 graded = mix(vec3(luminance), scene, mix(sat, 0.85, highlight * dread));
 	// Холодные болезненно-зелёные тени и сине-стальные полутона.
 	vec3 shadow_tint = mix(vec3(0.82, 0.94, 1.02), vec3(0.74, 0.90, 0.86), dread);
 	graded *= mix(shadow_tint, vec3(1.05, 1.0, 0.92), highlight);
+	graded *= mix(vec3(1.0), vec3(1.35, 0.82, 0.75), flare);
 	graded = max(vec3(0.0), (graded - 0.16) * mix(1.08, 1.18, dread) + 0.16 - dread * 0.03);
 	graded *= 1.0 - tension * 0.18;
 	// Видимость: тёмное вокруг смотрителя тонет во мраке, яркий свет (луч, фонари) пробивает его.

@@ -123,12 +123,15 @@ func _spawn_prop(it: Dictionary) -> Node3D:
 		_:
 			Geo.box(root, "Note", Vector3(0, .03, 0), Vector3(.28, .02, .22), Color("e0d6bc"))
 	root.rotation.y = hash(it.id) % 628 / 100.0
-	var glow := OmniLight3D.new()
-	glow.light_color = Color("f3dcae")
-	glow.light_energy = .55
-	glow.omni_range = 1.5
-	glow.position = Vector3(0, .35, 0)
-	root.add_child(glow)
+	# без OmniLight: в Compatibility у одного меша не больше 8 источников, а остров — один меш
+	for child in root.get_children():
+		if child is MeshInstance3D:
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = ((child.material_override as StandardMaterial3D).albedo_color if child.material_override is StandardMaterial3D else Color("e0d6bc"))
+			mat.emission_enabled = true
+			mat.emission = Color("f3dcae")
+			mat.emission_energy_multiplier = .35
+			child.material_override = mat
 	var label := Label3D.new()
 	label.text = "◆"
 	label.font_size = 30
