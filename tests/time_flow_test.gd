@@ -117,8 +117,9 @@ func run() -> void:
 	var hp: float = game.health
 	for i in 40:
 		d.tick(DT)
-	check(game.health < hp - 30, "Предел темноты — здоровье уходит (%.0f → %.0f)" % [hp, game.health])
-	for i in 200:
+	check(game.health < hp - 10 and game.health > hp - 25, "Предел темноты — здоровье уходит медленно (%.0f → %.0f за 10 с)" % [hp, game.health])
+	check(game.drain_log.get("dark", 0.0) > 0, "Потеря записана с причиной «темнота»")
+	for i in 320:
 		d.tick(DT)
 	check(game.health <= 0, "Если так и не найти свет — смерть")
 	game.health = 60

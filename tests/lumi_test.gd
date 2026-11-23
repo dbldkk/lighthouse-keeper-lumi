@@ -111,8 +111,9 @@ func run() -> void:
 	game.sanity = 0
 	game.health = 2.0
 	game.clear_enemies()
-	await physics(200)
-	check(game.finished and not game.last_run_won, "Death is reachable: a broken mind in the dark ends the shift")
+	game.madness_clock = 99.0   # v1.3: 10 с предупреждения уже прошли, урон 0.5/с
+	await physics(420)
+	check(game.finished and not game.last_run_won, "Death is reachable: a broken mind in the dark ends the shift (after a warned grace)")
 	print("RESULT: ", checks - failures, "/", checks, " lumi checks passed")
 	game.queue_free()
 	await create_timer(0.1).timeout

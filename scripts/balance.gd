@@ -14,12 +14,14 @@ const STARVING_AT := 15.0
 const SANITY_NIGHT_DRAIN := 0.32           ## рассудок/с ночью вне укрытия
 const SANITY_DARK_DRAIN := 0.75            ## доп. расход ночью без фонаря
 const SANITY_RECOVERY := 0.05              ## рассудок/с в безопасности
-const SANITY_BREAK_DAMAGE := 1.0           ## здоровье/с при нулевом рассудке
+const SANITY_BREAK_DAMAGE := 0.5           ## здоровье/с при нулевом рассудке во тьме (v1.3: было 1.0 и везде)
+const SANITY_BREAK_GRACE := 10.0           ## секунд предупреждения до урона
 const SANITY_HALLUCINATE_AT := 38.0        ## ниже — фантомы и выпады
 const SANITY_TENSE_AT := 55.0              ## ниже — сердцебиение и виньетка
 
 const COLD_AT := 18.0                      ## тепло ниже — урон от холода
-const COLD_DAMAGE := 0.55                  ## здоровье/с при переохлаждении
+const COLD_DAMAGE := 0.35                  ## здоровье/с при переохлаждении (v1.3: было 0.55)
+const COLD_GRACE := 12.0                   ## секунд предупреждения до урона
 
 const LOW_HEALTH_AT := 35.0                ## предупреждение и сердцебиение
 

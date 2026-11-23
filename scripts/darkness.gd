@@ -5,7 +5,7 @@ extends Node
 ##   копит «тьму»: предупреждения на 40% и 70%, на 100% темнота начинает отнимать здоровье —
 ##   до смерти, если так и не найти свет. Свет или помещение быстро сбрасывают шкалу.
 const DARK_LIMIT := 45.0            ## секунд полной темноты до урона
-const DARK_DAMAGE := 5.0            ## здоровья в секунду после предела
+const DARK_DAMAGE := 1.5            ## здоровья в секунду после предела (медленно, с плашкой и сердцебиением)
 const DARK_RECOVER := 3.0           ## во сколько раз быстрее шкала спадает на свету
 const UNLIT_SANITY := 0.25          ## доп. расход рассудка/с ночью, пока маяк не горит
 const UNLIT_AGGRESSION := 0.3       ## прибавка к смелости охотника без маяка
@@ -66,6 +66,8 @@ func tick(delta: float) -> void:
 		level = minf(1.0, level + delta / DARK_LIMIT)
 	else:
 		level = maxf(0, level - delta * DARK_RECOVER / DARK_LIMIT)
+	if dark and level >= .4:
+		game.drain_warning("dark")
 	if level >= .4 and warned < 1:
 		warned = 1
 		game.alert("ТЕМНОТА", "Без света долго не протянуть. Фонарь (F), ракета (X), костёр или помещение", 5)
@@ -80,7 +82,7 @@ func tick(delta: float) -> void:
 		if warned < 3:
 			warned = 3
 			game.notify("Темнота смыкается. Каждый вдох — боль. Свет! Сейчас же!", 4, 2)
-		game.health = maxf(0, game.health - DARK_DAMAGE * delta)
+		game.drain_health(DARK_DAMAGE, delta, "dark")
 		game.camera_shake = maxf(game.camera_shake, .08)
 	if level < .3:
 		warned = mini(warned, 0)

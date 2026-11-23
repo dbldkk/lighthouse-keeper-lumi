@@ -54,6 +54,10 @@ var sanity_bar: ProgressBar
 var stamina_bar: ProgressBar
 var fishing_overlay: Control
 var danger: ColorRect
+var drain_panel: Control
+var drain_title: Label
+var drain_hint: Label
+var drain_cause := ""
 var atmosphere: ColorRect
 var reader: Control
 var reader_title: Label
@@ -233,11 +237,36 @@ func build_game_ui() -> void:
 	fade_rect.color = Color(0.01, 0.02, 0.03, 0)
 	fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(fade_rect)
+	drain_panel = Control.new()
+	drain_panel.name = "DrainWarning"
+	drain_panel.position = Vector2(470, 186)
+	drain_panel.size = Vector2(500, 58)
+	drain_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	game_ui.add_child(drain_panel)
+	drain_title = text(drain_panel, "", Rect2(0, 2, 500, 24), 17, Color("ff9a7a"))
+	drain_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	drain_hint = text(drain_panel, "", Rect2(0, 28, 500, 22), 13, PAPER)
+	drain_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	drain_panel.hide()
 	danger = ColorRect.new()
 	danger.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	danger.color = Color(0.5, 0.05, 0.03, 0)
 	danger.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(danger)
+
+## Постоянная плашка «почему уходит здоровье» (v1.3, баг #5). warn_only — отсрочка, урона ещё нет.
+func show_drain(cause: String, rate: float, warn_only: bool) -> void:
+	drain_cause = cause
+	if not is_instance_valid(drain_panel):
+		return
+	if cause.is_empty() or not game.DRAIN_TEXT.has(cause):
+		drain_panel.hide()
+		return
+	drain_panel.show()
+	var info: Array = game.DRAIN_TEXT[cause]
+	drain_title.text = ("СКОРО: " if warn_only else "") + str(info[0]) + ("" if warn_only else "  ·  −%.1f/с" % rate)
+	drain_hint.text = str(info[1])
+	drain_title.modulate.a = .75 + .25 * sin(Time.get_ticks_msec() / 180.0) if not warn_only else .85
 
 func make_button(parent: Control, content: String, at: Vector2, callback: Callable, primary: bool = false) -> Button:
 	var node := Button.new()
@@ -560,6 +589,10 @@ func refresh() -> void:
 	var extra_prompt: String = game.extras.prompt()
 	if not extra_prompt.is_empty():
 		prompt_label.text = extra_prompt
+	var night_prompt: String = game.night_events.prompt() if is_instance_valid(game.night_events) else ""
+	if not night_prompt.is_empty():
+		prompt_label.text = night_prompt
+		extra_prompt = night_prompt
 	if is_instance_valid(game.nearest_station) and lighthouse_prompt.is_empty() and extra_prompt.is_empty():
 		var id: String = game.nearest_station.station_id
 		if fieldwork.available_at(game.nearest_station):

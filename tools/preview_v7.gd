@@ -48,7 +48,7 @@ func run() -> void:
 	game.save_path = "user://preview_v7.json"
 	game.preferences.path = "user://preview_v7_settings.cfg"
 	game.preferences.tutorial_done = true
-	for section in ["hunter", "menu", "events", "water", "itch"]:
+	for section in ["hunter", "menu", "events", "water", "itch", "ui"]:
 		if only in ["", section]:
 			await call(section + "_shots")
 	quit()
@@ -156,3 +156,47 @@ func water_shots() -> void:
 
 func itch_shots() -> void:
 	pass
+
+## Интерфейс до/после переделки (UI_TAG=before|after).
+func ui_shots() -> void:
+	var tag := OS.get_environment("UI_TAG")
+	if tag.is_empty():
+		tag = "after"
+	game.hud.show_menu("main")
+	await create_timer(.5).timeout
+	await shot("ui_%s_1_menu" % tag)
+	game.hud.settings_panel.open()
+	await create_timer(.3).timeout
+	await shot("ui_%s_2_settings" % tag)
+	game.hud.settings_panel.close()
+	game.achievements.open_records()
+	await create_timer(.3).timeout
+	await shot("ui_%s_3_records" % tag)
+	game.achievements.close_records()
+	game.start_or_resume()
+	game.tutorial.stop()
+	await create_timer(.6).timeout
+	quiet()
+	place(Vector3(2.2, 1.2, 4.6), 18.0)
+	game.hour = 17.5
+	game.hours_per_second = 0
+	game.notify("Генератору нужно топливо. Проверьте ящики на тропе.", 30)
+	game.achievements.unlocked.erase("first_night")
+	game.achievements.unlock("first_night")
+	await create_timer(.8).timeout
+	await shot("ui_%s_4_hud_day" % tag)
+	quiet()
+	night(5)
+	game.lighthouse_on = false
+	game.player.lantern_on = false
+	place(Vector3(12, 1.2, 8), 18.0)
+	game.darkness.level = 1.0
+	for i in 10:
+		game.darkness.tick(.1)
+		game.update_drain_feedback(.1)
+		await process_frame
+	await shot("ui_%s_5_hud_night_drain" % tag)
+	game.paused = true
+	game.hud.show_menu("pause")
+	await create_timer(.3).timeout
+	await shot("ui_%s_6_pause" % tag)

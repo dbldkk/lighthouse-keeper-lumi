@@ -36,6 +36,8 @@ const TUTORIAL = preload("res://scripts/tutorial.gd")
 const DIFFICULTY = preload("res://scripts/difficulty.gd")
 const ACHIEVEMENTS = preload("res://scripts/achievements.gd")
 const DARKNESS = preload("res://scripts/darkness.gd")
+const NIGHT_EVENTS = preload("res://scripts/night_events.gd")
+const WATER_LURKER = preload("res://scripts/water_lurker.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -119,10 +121,27 @@ var small_scares: Node3D
 var tutorial: Node
 var achievements: Node
 var darkness: Node
+var night_events: Node3D
+var water_lurker: Node3D
 var difficulty := "normal"           ## normal / nightmare (scripts/difficulty.gd)
 var escalation: Node
 ## Последняя точка твёрдой земли: туда возвращаемся после падения в воду.
 var last_safe_position := Vector3(3, 1.3, 4)
+## Медленные потери здоровья (v1.3, баг #5): каждая видна — плашка с причиной, виньетка, сердцебиение.
+const DRAIN_TEXT := {
+	"dark": ["ТЕМНОТА ЗАБИРАЕТ СИЛЫ", "Зажгите фонарь (F), идите к маяку или в дом"],
+	"madness": ["РАССУДОК СЛОМЛЕН", "Во тьме он ранит тело. Свет или укрытие — сразу"],
+	"cold": ["ХОЛОД ЗАБИРАЕТ СИЛЫ", "Печь в хижине, костёр в гавани или горячая еда"],
+	"hunger": ["ГОЛОД ЗАБИРАЕТ СИЛЫ", "Поешьте (R): рыба, урожай, пайки"],
+}
+var drain_causes := {}            ## причина → здоровье/с в этом кадре
+var drain_warn := {}              ## причина → идёт отсрочка, урона ещё нет
+var drain_shown := ""
+var drain_tick := 0.0
+var drain_beat := 0.0
+var drain_log := {}               ## причина → сколько здоровья забрала за смену (тесты, отчёт)
+var madness_clock := 0.0
+var cold_clock := 0.0
 var safe_sample_clock := 0.0
 ## Сколько секунд после возврата из воды не тикают таймеры событий.
 var respawn_grace := 0.0
@@ -245,6 +264,14 @@ func _ready() -> void:
 	darkness.name = "Darkness"
 	darkness.game = self
 	add_child(darkness)
+	night_events = NIGHT_EVENTS.new()
+	night_events.name = "NightEvents"
+	night_events.game = self
+	add_child(night_events)
+	water_lurker = WATER_LURKER.new()
+	water_lurker.name = "WaterLurker"
+	water_lurker.game = self
+	add_child(water_lurker)
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -437,6 +464,11 @@ func start_shift() -> void:
 		small_scares.reset()
 	if is_instance_valid(darkness):
 		darkness.reset()
+	if is_instance_valid(night_events):
+		night_events.reset()
+	if is_instance_valid(water_lurker):
+		water_lurker.reset()
+		water_lurker.warned_once = false
 	playing = true
 	paused = false
 	finished = false
@@ -532,11 +564,12 @@ func _process(delta: float) -> void:
 		hunger = maxf(0, hunger - delta * drain)
 		apply_hunger(delta)
 		if hunger <= 0:
-			health -= delta * BAL.STARVING_DAMAGE
+			drain_health(BAL.STARVING_DAMAGE, delta, "hunger")
 		update_sanity(delta)
 		update_lantern_oil(delta)
 		update_cold(delta)
 		warn_low_health()
+		update_drain_feedback(delta)
 		if is_night():
 			was_night = true
 			spawn_clock += delta
@@ -756,6 +789,12 @@ func update_atmosphere() -> void:
 	if event_fog > 0:
 		env.fog_density += .012 * event_fog
 		env.fog_light_color = env.fog_light_color.lerp(Color("4d5a66"), .5 * event_fog)
+	var thick: float = night_events.fog_strength() if is_instance_valid(night_events) else 0.0
+	if thick > 0:
+		# густой туман особой ночи: видно лишь несколько метров вокруг
+		env.fog_density += .045 * thick
+		env.fog_light_color = env.fog_light_color.lerp(Color("3b464e"), .6 * thick)
+		env.fog_height_density = lerpf(env.fog_height_density, .02, thick)
 	env.fog_density *= preferences.fog_scale()
 
 func is_night() -> bool:
@@ -1030,8 +1069,51 @@ func apply_hunger(delta: float) -> void:
 	elif hunger > 45:
 		hunger_warned = false
 
+## Плавная потеря здоровья с названной причиной (темнота, холод, голод, сломленный рассудок).
+func drain_health(rate: float, delta: float, cause: String) -> void:
+	if rate <= 0 or delta <= 0:
+		return
+	health = maxf(0, health - rate * delta)
+	drain_causes[cause] = float(drain_causes.get(cause, 0.0)) + rate
+	drain_log[cause] = float(drain_log.get(cause, 0.0)) + rate * delta
+
+## Причина вот-вот начнёт ранить: предупреждение без урона.
+func drain_warning(cause: String) -> void:
+	drain_warn[cause] = true
+
+func update_drain_feedback(delta: float) -> void:
+	var cause := ""
+	var rate := 0.0
+	for c in drain_causes:
+		if float(drain_causes[c]) > rate:
+			rate = drain_causes[c]
+			cause = c
+	var warn_only := cause.is_empty() and not drain_warn.is_empty()
+	if warn_only:
+		cause = drain_warn.keys()[0]
+	if is_instance_valid(hud) and hud.has_method("show_drain"):
+		hud.show_drain(cause, rate, warn_only)
+	if not cause.is_empty() and not warn_only:
+		hud.danger.color.a = maxf(hud.danger.color.a, .12 + .08 * sin(Time.get_ticks_msec() / 260.0))
+		drain_beat -= delta
+		if drain_beat <= 0:
+			drain_beat = 1.15
+			sound.scare("heartbeat", -6, 1.0)
+		drain_tick += delta * rate
+		if drain_tick >= 3.0:
+			feedback(player.position + Vector3.UP * .4, "−%d · %s" % [roundi(drain_tick), String(DRAIN_TEXT[cause][0]).to_lower()], Color("ff8a6a"))
+			drain_tick = 0
+		if cause != drain_shown:
+			alert(DRAIN_TEXT[cause][0], DRAIN_TEXT[cause][1], 5)
+	else:
+		drain_beat = 0
+	drain_shown = cause if not warn_only else ""
+	drain_causes.clear()
+	drain_warn.clear()
+
 func take_damage(amount: float, source: String = "shadow") -> void:
 	health = maxf(0, health - amount)
+	drain_log[source] = float(drain_log.get(source, 0.0)) + amount
 	player.play_gesture("hit", .36)
 	hud.danger.color.a = clampf(0.3 + amount / 40.0, 0.3, 0.6)
 	camera_shake = maxf(camera_shake, clampf(amount / 25.0, .25, .7))
@@ -1355,7 +1437,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				survival.drink()
 		KEY_E:
 			if interaction_cooldown <= 0:
-				if not (hunter.hiding() and hunter.interact()) and not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not hunter.interact() and not lore.interact() and not save_points.interact() and not supplies.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
+				if not (hunter.hiding() and hunter.interact()) and not night_events.interact() and not lighthouse_action() and not building_door_action() and not island_events.interact() and not extras.interact() and not hunter.interact() and not lore.interact() and not save_points.interact() and not supplies.interact() and not interior_redirect(nearest_station) and not minigames.offer(nearest_station) and attempt_interaction(nearest_station) and not fishing.is_open() and player.enabled:
 					player.play_gesture("interact")
 		KEY_SPACE:
 			if lighthouse_interior.active:
@@ -1831,8 +1913,16 @@ func update_sanity(delta: float) -> void:
 		if not player.lantern_on:
 			rate -= BAL.SANITY_DARK_DRAIN
 	sanity = clampf(sanity + delta * rate, 0, 100)
-	if sanity <= 0:
-		health -= delta * BAL.SANITY_BREAK_DAMAGE
+	# Сломленный рассудок ранит только во тьме и после отсрочки: свет (фонарь, маяк, помещение) сразу останавливает урон.
+	var dark_hurts: bool = is_instance_valid(darkness) and darkness.level >= 1.0
+	if sanity <= 0 and not player.lantern_on and not is_safe(player.position) and not first_shift_demo.active() and not dark_hurts:
+		madness_clock += delta
+		if madness_clock >= BAL.SANITY_BREAK_GRACE:
+			drain_health(BAL.SANITY_BREAK_DAMAGE, delta, "madness")
+		else:
+			drain_warning("madness")
+	else:
+		madness_clock = 0.0
 	if sanity < BAL.SANITY_HALLUCINATE_AT and not sanity_warned:
 		sanity_warned = true
 		alert("РАССУДОК НА ПРЕДЕЛЕ", "Вам мерещится. Свет и укрытие возвращают ясность; без рассудка теряется здоровье", 5)
@@ -1843,11 +1933,17 @@ func update_cold(delta: float) -> void:
 	if not survival.exposure_enabled():
 		return
 	if survival.warmth < BAL.COLD_AT:
-		health -= delta * BAL.COLD_DAMAGE
+		cold_clock += delta
+		if cold_clock >= BAL.COLD_GRACE:
+			drain_health(BAL.COLD_DAMAGE, delta, "cold")
+		else:
+			drain_warning("cold")
 		if not cold_warned:
 			cold_warned = true
 			alert("ВЫ ЗАМЕРЗАЕТЕ", "Холод отнимает здоровье. Печь в хижине, костёр в гавани или горячая еда", 5)
-	elif survival.warmth > BAL.COLD_AT + 15:
+	else:
+		cold_clock = 0.0
+	if survival.warmth > BAL.COLD_AT + 15:
 		cold_warned = false
 
 func warn_low_health() -> void:

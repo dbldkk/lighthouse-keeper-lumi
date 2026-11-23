@@ -179,6 +179,9 @@ func _update_overlay(d: float, open: float, night: float) -> void:
 		var space: PhysicsDirectSpaceState3D = hunter.get_world_3d().direct_space_state
 		var back := cam.global_transform.basis.z
 		var k := clampf((d - 3.0) / 6.0, .35, 1.0) * (.8 + .2 * sin(time * 2.3))
+		# густой туман особой ночи прячет глаза дальше ~9 м — он выходит из молока вплотную
+		var fog: float = g.night_events.fog_strength() if "night_events" in g and is_instance_valid(g.night_events) else 0.0
+		k *= lerpf(1.0, clampf(1.0 - (d - 6.0) / 3.0, 0, 1), fog)
 		for gl in glints:
 			var eye: Vector3 = gl.global_position
 			if cam.is_position_behind(eye):
@@ -188,6 +191,8 @@ func _update_overlay(d: float, open: float, night: float) -> void:
 			if not space.intersect_ray(q).is_empty():
 				continue
 			overlay_points.append([cam.unproject_position(eye), k])
+		if k <= .01:
+			overlay_points.clear()
 		overlay_visible = not overlay_points.is_empty()
 	if overlay != null:
 		overlay.queue_redraw()
