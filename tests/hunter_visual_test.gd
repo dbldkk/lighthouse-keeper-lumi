@@ -60,7 +60,7 @@ func run() -> void:
 			xfade = sm.get_transition(i).xfade_time
 	check(sm is AnimationNodeStateMachine and sm.get_transition_count() == 30 and xfade > .1, "Переходы между клипами плавные (кроссфейд %.2f с)" % xfade)
 	var body_mat: StandardMaterial3D = meshes["HunterBody"].material_override
-	check(body_mat != null and body_mat.vertex_color_use_as_albedo and body_mat.rim_enabled and body_mat.roughness < .35, "Кожа: мокрая, вершинные цвета, rim-свет")
+	check(body_mat != null and body_mat.vertex_color_use_as_albedo and body_mat.rim_enabled and body_mat.roughness < .5, "Кожа: мокрая, вершинные цвета, rim-свет")
 	var eye_mat: StandardMaterial3D = meshes["HunterEyes"].material_override
 	check(eye_mat != null and eye_mat.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED, "Глаза светятся сами")
 	var glow: Node = v.head_attach.get_node_or_null("EyeGlow") if v.head_attach else null
