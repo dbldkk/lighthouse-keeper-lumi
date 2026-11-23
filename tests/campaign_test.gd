@@ -283,7 +283,7 @@ func run() -> void:
 	check(not short_save.has("day_checkpoint"),"A same-day checkpoint from the other calendar stays out of a short save")
 	check(game.load_game() and game.campaign.calendar_days()==14 and game.day==8 and game.retry_day() and game.campaign.calendar_days()==14 and game.day==8,"Loading replaces a mismatched checkpoint with one for the current calendar")
 	game.start_demo()
-	check(not game.campaign.enabled and game.day==5,"Harbor asset demonstration remains a separate free-roam fixture")
+	check(game.campaign.enabled and game.day==5 and 4 in game.campaign.state.completed_days,"Harbor demonstration now drops into the real campaign on day 5")
 	game.start_or_resume()
 	check(game.campaign.enabled and game.campaign.calendar_days()==14 and game.day==1,"Starting a normal game after the demo opens the 14-day campaign")
 	print("CAMPAIGN_METRICS nominal_seconds=",nominal_seconds," supply_interactions=",supplies," completed_journal_entries=",completed_journal)

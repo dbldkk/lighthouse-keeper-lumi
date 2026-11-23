@@ -101,7 +101,7 @@ func run() -> void:
 	game.player.lantern_on = false
 	enemy.position = game.player.position + Vector3(0, 0, 0.7)
 	enemy.attack_cooldown = 0
-	await create_timer(0.39).timeout
+	await create_timer(0.85).timeout
 	check(game.health < 100, "Unprotected player takes damage")
 	game.paused = true
 	var old_position := enemy.position

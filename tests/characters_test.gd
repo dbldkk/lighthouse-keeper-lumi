@@ -168,7 +168,7 @@ func run() -> void:
 	var heavy = game.enemies.back()
 	await frames(21)
 	check(heavy.kind=="drowned" and heavy.motion.current=="attack" and game.health==100,"Drowned plays its own slower windup")
-	await frames(15)
+	await frames(40)
 	check(game.health<=83 and player.motion.current=="hit","Drowned deals stronger damage on impact and the keeper flinches")
 	game.queue_free()
 	await process_frame

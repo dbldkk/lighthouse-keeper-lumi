@@ -32,7 +32,7 @@ func run() -> void:
 		await physics_frame
 	check(game.player.is_on_floor(), "Water recovery returns player to solid ground")
 	check(game.player.position.distance_to(Vector3(3, 1, 4)) < 0.5, "Water recovery returns to the cabin spawn")
-	check(game.health == 90 and not game.finished, "Water recovery applies damage once without a death loop")
+	check(game.health == 100 - preload("res://scripts/balance.gd").FALL_DAMAGE and not game.finished, "Water recovery applies damage once without a death loop")
 	print("RESULT: ", checks - failures, "/", checks, " spawn checks passed")
 	game.queue_free()
 	await create_timer(0.1).timeout
