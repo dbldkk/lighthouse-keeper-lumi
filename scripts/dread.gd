@@ -61,7 +61,7 @@ func target_sight() -> float:
 	var day_sight := BAL.DREAD_SIGHT_DAY
 	var night_sight := BAL.DREAD_SIGHT_LANTERN if game.player.lantern_on else BAL.DREAD_SIGHT_DARK
 	var s := lerpf(day_sight, night_sight, night)
-	if is_instance_valid(game.island_events) and game.island_events.current == "fog":
+	if (is_instance_valid(game.island_events) and game.island_events.current == "fog" or is_instance_valid(game.escalation) and game.escalation.fog):
 		s = minf(s, BAL.DREAD_SIGHT_FOG)
 	if game.lighthouse_on and game.is_safe(game.player.position):
 		s *= 1.25
@@ -84,7 +84,7 @@ func _update_screen(delta: float) -> void:
 		var p: Vector2 = game.camera.unproject_position(game.player.global_position + Vector3.UP * .8)
 		focus = Vector2(clampf(p.x / view.x, 0, 1), clampf(p.y / view.y, 0, 1))
 	var mist := lerpf(BAL.DREAD_MIST_DAY, BAL.DREAD_MIST_NIGHT, night)
-	if is_instance_valid(game.island_events) and game.island_events.current == "fog":
+	if (is_instance_valid(game.island_events) and game.island_events.current == "fog" or is_instance_valid(game.escalation) and game.escalation.fog):
 		mist = maxf(mist, .9)
 	if indoors():
 		mist = 0.0

@@ -327,7 +327,7 @@ func _can_see_player() -> bool:
 	var p: Vector3 = game.player.global_position
 	var d := Vector2(p.x - body.global_position.x, p.z - body.global_position.z).length()
 	var sight := (SIGHT_LANTERN if game.player.lantern_on else SIGHT_DARK) * lerpf(1.0, 1.3, clampf(aggression - 1.0, 0, 1))
-	if game.island_events.current == "fog":
+	if game.island_events.current == "fog" or is_instance_valid(game.escalation) and game.escalation.fog:
 		sight *= .7
 	return d <= sight
 

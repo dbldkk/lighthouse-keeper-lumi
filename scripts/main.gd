@@ -30,6 +30,7 @@ const HUNTER = preload("res://scripts/hunter.gd")
 const LORE = preload("res://scripts/lore.gd")
 const SAVE_POINTS = preload("res://scripts/save_points.gd")
 const SUPPLIES = preload("res://scripts/supplies.gd")
+const ESCALATION = preload("res://scripts/escalation.gd")
 var expedition := EXPEDITION.new()
 var survival := SURVIVAL.new()
 var campaign := CAMPAIGN.new()
@@ -210,6 +211,10 @@ func _ready() -> void:
 	supplies.game = self
 	add_child(supplies)
 	supplies.setup()
+	escalation = ESCALATION.new()
+	escalation.name = "Escalation"
+	escalation.game = self
+	add_child(escalation)
 	widen_gangplank()
 	apply_lantern_light()
 	var listener := AudioListener3D.new()
@@ -393,6 +398,8 @@ func start_shift() -> void:
 		lore.reset()
 	if is_instance_valid(supplies):
 		supplies.reset()
+	if is_instance_valid(escalation):
+		escalation.reset()
 	playing = true
 	paused = false
 	finished = false
@@ -1344,6 +1351,7 @@ func save_game(quiet: bool = false) -> bool:
 	state["photos"] = photo.save_data()
 	state["lore"] = lore.save_data()
 	state["supplies"] = supplies.save_data()
+	state["escalation"] = escalation.save_data()
 	state["hunter"] = {"announced": hunter.announced, "catches": hunter.catches}
 	state["dread_found"] = dread.found.keys()
 	for station in stations:
@@ -1444,6 +1452,7 @@ func load_game() -> bool:
 	lore.restore(state.get("lore", {}))
 	if state.has("supplies"):
 		supplies.restore(state.supplies)
+	escalation.restore(state.get("escalation", {}))
 	hunter.leave_hiding()
 	var hunter_state: Dictionary = state.get("hunter", {})
 	hunter.announced = bool(hunter_state.get("announced", false))
