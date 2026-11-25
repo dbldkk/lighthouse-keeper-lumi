@@ -24,7 +24,22 @@ const HEAR_RUN := 19.0
 const HEAR_WALK := 4.5
 const LOSE_DIST := 24.0
 const SEARCH_SECONDS := 9.0
-const BREATH_MAX := 6.0
+const BREATH_MAX := 8.0           ## v1.3.2: было 6 — короче любого обыска
+const BREATH_RECOVER := 1.2        ## в секунду, когда отпустили (было 0.45)
+## v1.3.2 — укрытие должно спасать. Если он не видел, куда вы спрятались, он обыскивает место
+## ограниченное время: бродит, один раз (на «Кошмаре» — два) подходит к укрытию, бьёт по дверце,
+## принюхивается INSPECT_SECONDS — и уходит. Находит, только если видел, как вы прятались,
+## если вы дышите рядом с ним дольше NOISE_LIMIT, если кончилось дыхание (вздох)
+## или если вы третий раз за ночь прячетесь в одном и том же месте.
+const HIDE_SEARCH_SECONDS := 10.0
+const INSPECT_AT := 2.5            ## через сколько секунд обыска он подходит к укрытию
+const INSPECT_SECONDS := 3.2       ## сколько стоит вплотную (дыхания хватает: 8 с)
+const NOISE_LIMIT := 0.6           ## столько секунд дыхания вплотную он «не слышит»
+const KNOWN_GRAB_SECONDS := 1.4    ## видел, куда вы залезли: бьёт по дверце и вытаскивает
+const SEE_ENTER_LANTERN := 10.0    ## на таком расстоянии он видит, как вы прячетесь (с фонарём)
+const SEE_ENTER_DARK := 4.5
+const GIVE_UP_SECONDS := 14.0      ## после неудачного обыска уходит и не возвращается к укрытию
+const REPEAT_LIMIT := 3            ## на третий раз за ночь в одном укрытии он его уже знает
 const BREATH_SANITY := 1.6         ## рассудка в секунду, пока дыхание задержано
 const FOUND_DIST := 2.1
 
@@ -60,6 +75,17 @@ var hide_return := Vector3.ZERO
 var breath := BREATH_MAX
 var holding := false
 var gasp_cooldown := 0.0
+var hide_known := false
+var hide_reason := ""
+var hide_clock := 0.0
+var inspect_time := 0.0
+var inspections := 0
+var hide_noise := 0.0
+var banged := false
+var give_up_time := 0.0
+var hide_target := Vector3.ZERO
+var spot_uses := {}
+var door_view: Control
 var prompt: Label
 var breath_bar: ProgressBar
 var announced := false
@@ -221,6 +247,23 @@ func interact() -> bool:
 func hide_in(id: String) -> void:
 	for s in spots:
 		if s.id == id:
+			if active:
+				spot_uses[id] = int(spot_uses.get(id, 0)) + 1
+			hide_known = false
+			hide_reason = ""
+			if active and seen_entering(s):
+				hide_known = true
+				hide_reason = "seen"
+			elif active and int(spot_uses[id]) >= REPEAT_LIMIT and (state in ["chase", "search", "investigate"] or not space.is_empty()):
+				hide_known = true
+				hide_reason = "repeat"
+			hide_clock = 0
+			inspect_time = 0
+			inspections = 0
+			hide_noise = 0
+			banged = false
+			give_up_time = 0
+			hide_target = Vector3.ZERO
 			hidden_in = id
 			hide_return = game.player.global_position
 			game.player.enabled = false
@@ -233,6 +276,27 @@ func hide_in(id: String) -> void:
 			game.sound.interact("wood")
 			game.notify("Вы спрятались: %s. Пробел — задержать дыхание, когда он рядом. E — выйти." % s.title, 6, 1)
 			return
+
+## Видит ли он, как вы залезаете в укрытие: в той же комнате — да; снаружи — если близко и стены не мешают.
+func seen_entering(s: Dictionary) -> bool:
+	if not active or not is_instance_valid(body):
+		return false
+	if not str(s.room).is_empty():
+		return space == str(s.room)
+	if not space.is_empty() or not _player_outside():
+		return false
+	var p: Vector3 = game.player.global_position
+	var d := _flat(p, body.global_position)
+	var reach := SEE_ENTER_LANTERN if game.player.lantern_on else SEE_ENTER_DARK
+	if game.island_events.current == "fog" or is_instance_valid(game.escalation) and game.escalation.fog:
+		reach *= .7
+	return d <= reach and _clear_line(body.global_position + Vector3.UP * 1.6, p + Vector3.UP * 1.0)
+
+func _clear_line(a: Vector3, b: Vector3) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(a, b)
+	q.collision_mask = 1
+	q.exclude = [body.get_rid(), game.player.get_rid()]
+	return body.get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 func leave_hiding() -> void:
 	if not hiding():
@@ -255,6 +319,8 @@ func reset() -> void:
 	_despawn()
 	catches = 0
 	mercy_time = 0
+	spot_uses.clear()
+	give_up_time = 0
 	nights_hunted = 0
 	announced = false
 
@@ -275,6 +341,7 @@ func _spawn() -> void:
 	state_time = 0
 	target = _patrol_point()
 	nights_hunted += 1
+	spot_uses.clear()
 	if is_instance_valid(game.escalation):
 		aggression = game.escalation.hunter_aggression()
 	game.sound.sfx("groan", -6, .62, far + Vector3.UP * 2)
@@ -449,6 +516,7 @@ func _process(delta: float) -> void:
 	state_time += delta
 	repel_time = maxf(0, repel_time - delta)
 	mercy_time = maxf(0, mercy_time - delta)
+	give_up_time = maxf(0, give_up_time - delta)
 	gasp_cooldown = maxf(0, gasp_cooldown - delta)
 	_tick_breath(delta)
 	if space.is_empty():
@@ -485,6 +553,8 @@ func _tick_outside(delta: float) -> void:
 			game.sound.sfx("groan", -2, .5, here + Vector3.UP * 2)
 	else:
 		beam_clock = maxf(0, beam_clock - delta)
+	if hiding() and state != "flee" and state in ["chase", "search", "investigate"] and _hide_search(delta):
+		return
 	match state:
 		"patrol":
 			if _can_see_player():
@@ -757,15 +827,8 @@ func _tick_room(delta: float) -> void:
 			_catch()
 			return
 		_room_step(CHASE_SPEED * .55, delta)
-	else:
-		if _flat(here, target) < .3:
-			target = _room_point()
-			if rng.randf() < .45:
-				target = (_hidden_spot().at as Vector3) + Vector3(rng.randf_range(-.6, .6), 0, .8)
-		_room_step(1.3, delta)
-		_sniff_hiding()
-	if room_clock > 13.0 and hiding():
-		game.notify("Шаги удаляются. Дверь хлопнула.", 4)
+	elif not _hide_search(delta):
+		# укрытие в другом месте — здесь вас нет
 		_leave_room()
 
 func _room_step(speed: float, delta: float) -> void:
@@ -795,7 +858,7 @@ func _tick_breath(delta: float) -> void:
 		if breath <= 0 and gasp_cooldown <= 0:
 			_gasp()
 	else:
-		breath = minf(BREATH_MAX, breath + delta * .45)
+		breath = minf(BREATH_MAX, breath + delta * BREATH_RECOVER)
 
 var holding_forced := false
 var breath_key := KEY_SPACE          ## переназначается в настройках
@@ -821,10 +884,109 @@ func _sniff_hiding() -> void:
 	if _flat(body.global_position, s.at) < FOUND_DIST and not (holding and breath > 0):
 		_found(s)
 
-func _found(s: Dictionary) -> void:
+func _found(s: Dictionary, why := "breath") -> void:
 	leave_hiding()
-	game.notify("Оно услышало дыхание и вытащило вас из укрытия!", 5, 2)
+	var text := {"breath": "Оно услышало дыхание и вытащило вас из укрытия!",
+		"seen": "Оно видело, куда вы спрятались, — и вырвало дверцу!",
+		"repeat": "Третий раз в одном укрытии — оно уже знало, где искать!"}
+	game.notify(str(text.get(why, text.breath)), 5, 2)
 	_catch()
+
+## Обыск укрытия. true — кадр обработан здесь.
+func _hide_search(delta: float) -> bool:
+	var s := _hidden_spot()
+	if s.is_empty() or not _same_space(s) or give_up_time > 0:
+		return false
+	var at: Vector3 = s.at
+	var here := body.global_position
+	var indoors := not space.is_empty()
+	if not indoors and _flat(here, at) > LOSE_DIST:
+		return false
+	if state != "search":
+		_set_state("search")
+	hide_clock += delta
+	var d := _flat(here, at)
+	if hide_known:
+		hide_target = at
+		if d < 1.2:
+			body.velocity = Vector3.ZERO
+			inspect_time += delta
+			_bang(s)
+			if inspect_time > KNOWN_GRAB_SECONDS:
+				_found(s, hide_reason)
+			return true
+		_step_to(at, delta, indoors, 1.0)
+		return true
+	var limit := HIDE_SEARCH_SECONDS * (1.2 if game.difficulty == "nightmare" else 1.0)
+	if hide_clock > limit:
+		_give_up()
+		return true
+	var max_inspections := 2 if game.difficulty == "nightmare" else 1
+	var inspecting := inspections < max_inspections and hide_clock > INSPECT_AT + inspections * 4.0
+	if inspecting:
+		if d < 1.15:
+			body.velocity = Vector3.ZERO
+			inspect_time += delta
+			_bang(s)
+			if inspect_time > INSPECT_SECONDS:
+				inspections += 1
+				inspect_time = 0
+				banged = false
+				hide_target = Vector3.ZERO
+		else:
+			_step_to(at + (here - at).normalized() * .8, delta, indoors, .8)
+	else:
+		if hide_target == Vector3.ZERO or _flat(here, hide_target) < .4:
+			hide_target = _wander_near(at, indoors)
+		_step_to(hide_target, delta, indoors, .55)
+	# дыхание вплотную: короткий вдох прощается, долгое дыхание — нет
+	if _flat(body.global_position, at) < FOUND_DIST and not (holding and breath > 0):
+		hide_noise += delta
+		if hide_noise > NOISE_LIMIT:
+			_found(s, "breath")
+			return true
+	else:
+		hide_noise = maxf(0, hide_noise - delta * .5)
+	return true
+
+func _step_to(to: Vector3, delta: float, indoors: bool, speed_k: float) -> void:
+	if indoors:
+		target = to
+		_room_step(1.5 * speed_k + .3, delta)
+	else:
+		target = to
+		_move(to, INVESTIGATE_SPEED * speed_k, delta)
+
+func _wander_near(at: Vector3, indoors: bool) -> Vector3:
+	for i in 12:
+		var p: Vector3 = _room_point() if indoors else at + Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6))
+		if not indoors:
+			var g: Variant = game.night_raids.ground_at(p)
+			if g == null:
+				continue
+			p = g
+		if _flat(p, at) > FOUND_DIST + .6:
+			return p
+	return at + Vector3(3.2, 0, 0)
+
+func _bang(s: Dictionary) -> void:
+	if banged:
+		return
+	banged = true
+	game.sound.sfx("knock", 0, rng.randf_range(.5, .62), (s.at as Vector3) + Vector3.UP)
+	game.camera_shake = maxf(game.camera_shake, .3)
+	game.notify("Оно прямо у дверцы. Не дышите!", 3, 2)
+
+func _give_up() -> void:
+	give_up_time = GIVE_UP_SECONDS
+	hide_clock = 0
+	game.notify("Шаги удаляются. Оно ушло искать в другом месте.", 4)
+	if is_instance_valid(game.achievements):
+		game.achievements.note("hid")
+	if not space.is_empty():
+		_leave_room()
+	_set_state("patrol")
+	target = _far_point(18.0)
 
 # ---------------------------------------------------------------- звук
 func _tick_audio(delta: float) -> void:
@@ -883,6 +1045,47 @@ func _build_hud() -> void:
 	game.hud.root.add_child(breath_bar)
 	prompt.hide()
 	breath_bar.hide()
+	door_view = Control.new()
+	door_view.name = "HideDoorView"
+	door_view.set_anchors_preset(Control.PRESET_FULL_RECT)
+	door_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	door_view.draw.connect(_draw_door_view)
+	game.hud.root.add_child(door_view)
+	game.hud.root.move_child(door_view, 0)
+	door_view.hide()
+
+## Вид из укрытия: темнота, щель света под дверцей; когда он рядом — по щели проходит его тень.
+func _draw_door_view() -> void:
+	var r := door_view.get_rect()
+	var w := r.size.x
+	var h := r.size.y
+	door_view.draw_rect(Rect2(0, 0, w, h), Color(0.02, 0.018, 0.015, .78))
+	var gap_y := h * .8
+	var gap := Rect2(w * .22, gap_y, w * .56, 10)
+	door_view.draw_rect(gap.grow(10), Color(.05, .04, .03, .9))
+	door_view.draw_rect(gap, Color(.82, .66, .40, .75))
+	door_view.draw_rect(Rect2(gap.position + Vector2(0, 2), Vector2(gap.size.x, 2)), Color(.95, .82, .55, .5))
+	var info := door_shadow()
+	if info.x > 0:
+		var cx := gap.position.x + gap.size.x * (.5 + info.y * .45)
+		var sw := lerpf(30.0, 220.0, info.x)
+		door_view.draw_rect(Rect2(cx - sw * .5, gap.position.y - 2, sw, gap.size.y + 4), Color(0, 0, 0, clampf(.4 + info.x * .6, 0, 1)))
+		# две «ноги» тени
+		door_view.draw_rect(Rect2(cx - sw * .32, gap.position.y - 4, sw * .16, gap.size.y + 8), Color(0, 0, 0, .95))
+		door_view.draw_rect(Rect2(cx + sw * .16, gap.position.y - 4, sw * .16, gap.size.y + 8), Color(0, 0, 0, .95))
+
+## x — близость тени (0..1), y — сдвиг влево/вправо (-1..1).
+func door_shadow() -> Vector2:
+	if not hiding() or not active:
+		return Vector2.ZERO
+	var s := _hidden_spot()
+	if s.is_empty() or not _same_space(s):
+		return Vector2.ZERO
+	var d := _flat(body.global_position, s.at)
+	if d > 7.0:
+		return Vector2.ZERO
+	var side := clampf((body.global_position.x - (s.at as Vector3).x) / 3.0, -1, 1)
+	return Vector2(clampf(1.0 - d / 7.0, 0, 1), side)
 
 func _update_hud() -> void:
 	if prompt == null:
@@ -890,10 +1093,24 @@ func _update_hud() -> void:
 	if not game.playing or game.finished or game.paused:
 		prompt.hide()
 		breath_bar.hide()
+		if door_view != null:
+			door_view.hide()
 		return
+	if door_view != null:
+		door_view.visible = hiding()
+		if hiding():
+			door_view.queue_redraw()
 	if hiding():
 		var near := active and _same_space(_hidden_spot()) and _flat(body.global_position, _hidden_spot().at) < 7.0
-		prompt.text = ("ОНО РЯДОМ · держите ПРОБЕЛ — не дышать" if near else "Вы в укрытии · E — выйти") if breath > 0 else "Нечем дышать…"
+		var close := near and _flat(body.global_position, _hidden_spot().at) < FOUND_DIST + .4
+		if breath <= 0:
+			prompt.text = "Нечем дышать…"
+		elif close:
+			prompt.text = "ОНО ВПЛОТНУЮ · держите ПРОБЕЛ — не дышать!"
+		elif near:
+			prompt.text = "Шаги рядом · приготовьтесь задержать дыхание (ПРОБЕЛ)"
+		else:
+			prompt.text = "Вы в укрытии · E — выйти · дыхание восстанавливается"
 		prompt.add_theme_color_override("font_color", Color("ffb1a1") if near else Color("d9e2dc"))
 		prompt.show()
 		breath_bar.value = breath
