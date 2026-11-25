@@ -779,6 +779,8 @@ func update_atmosphere() -> void:
 	env.background_color = Color("101a1c").lerp(Color("03070a"), night)
 	var sun: DirectionalLight3D = world.get_node("Sun")
 	sun.light_energy = lerpf(0.62, 0.07, night)
+	if is_instance_valid(player):
+		player.set_night_readability(night)
 	sun.light_color = Color("a6b2b2").lerp(Color("5b6e86"), night)
 	world.get_node("Ocean").material_override.set_shader_parameter("night_factor", night)
 	coastal_life.night_strength = night

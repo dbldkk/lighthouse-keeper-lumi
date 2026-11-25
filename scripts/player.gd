@@ -53,7 +53,45 @@ func _ready() -> void:
 		lantern_socket.bone_name = "Lantern"
 	motion.play("idle", 0)
 	motion.tick(0)
+	_make_readability_lights()
 	_sync_lantern()
+
+## v1.3.2: ночью смотритель терялся в темноте (тёмное пальто, фонарь светит вниз).
+## Мягкая заливка со стороны камеры и холодный контровой свет сзади — короткие, почти не трогают землю.
+var fill_light: OmniLight3D
+var rim_light: OmniLight3D
+const FILL_ENERGY := 1.15
+const RIM_ENERGY := 1.7
+
+func _make_readability_lights() -> void:
+	fill_light = OmniLight3D.new()
+	fill_light.name = "KeeperFill"
+	fill_light.position = Vector3(.62, 1.95, .86)       # к камере (29, 34, 40)
+	fill_light.light_color = Color("d9c7a8")
+	fill_light.omni_range = 2.3
+	fill_light.omni_attenuation = 1.6
+	fill_light.shadow_enabled = false
+	fill_light.light_specular = .15
+	add_child(fill_light)
+	rim_light = OmniLight3D.new()
+	rim_light.name = "KeeperRim"
+	rim_light.position = Vector3(-.55, 1.75, -.8)
+	rim_light.light_color = Color("8fa6c2")
+	rim_light.omni_range = 2.0
+	rim_light.omni_attenuation = 1.4
+	rim_light.shadow_enabled = false
+	rim_light.light_specular = .5
+	add_child(rim_light)
+	set_night_readability(0.0)
+
+func set_night_readability(night: float) -> void:
+	if fill_light == null:
+		return
+	var k := clampf(night, 0, 1)
+	fill_light.light_energy = FILL_ENERGY * k
+	rim_light.light_energy = RIM_ENERGY * k
+	fill_light.visible = k > .03
+	rim_light.visible = k > .03
 
 func request_jump() -> void:
 	if enabled:

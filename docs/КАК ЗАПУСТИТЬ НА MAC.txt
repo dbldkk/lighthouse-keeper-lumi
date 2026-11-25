@@ -1,4 +1,4 @@
-Смотритель маяка — сборка Lumi v1.3 для macOS (универсальная: Apple Silicon M1–M4 и Intel)
+Смотритель маяка — сборка Lumi v1.3.2 для macOS (универсальная: Apple Silicon M1–M4 и Intel)
 
 Требования: macOS 11 Big Sur или новее на Apple Silicon, macOS 10.13 или новее на Intel.
 
